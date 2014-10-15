@@ -71,7 +71,6 @@ Connection::~Connection() {
 }
 
 void Bindy::assign_key_by_name(std::string name, SecByteBlock *key) {
-	// todo : do we mutex here?
 	if (login_key_map.count(name) == 1) {
 		key->Assign((const byte*)login_key_map[name].bytes.data(), AES::DEFAULT_KEYLENGTH);
 	}
@@ -246,16 +245,16 @@ void socket_thread_function(void* arg) {
 	try {
 		if (!inits_connect) { // this party accepts the connection
 			// Initial exchange
-			byte username[17]; 
-			sock->Receive(username, 16, 0);
-			username[16] = '\0';
+			byte username[USERNAME_LENGTH+1];
+			sock->Receive(username, USERNAME_LENGTH, 0);
+			username[USERNAME_LENGTH] = '\0';
 
 			// Authorization happens here
 			std::string name((const char*)username);
 			bindy->assign_key_by_name(name, conn->send_key);
 			bindy->assign_key_by_name(name, conn->recv_key);
 
-			sock->Receive(conn->recv_iv->BytePtr(), 16, 0); // TODO: replace constants with symbolics
+			sock->Receive(conn->recv_iv->BytePtr(), AES::DEFAULT_KEYLENGTH, 0);
 			conn->send_iv->Assign(*conn->recv_iv);
 
 			Message m_recv1 = recv_packet(conn);
@@ -278,11 +277,11 @@ void socket_thread_function(void* arg) {
 			bindy->assign_key_by_name(bindy->get_master_name(), conn->send_key);
 			bindy->assign_key_by_name(bindy->get_master_name(), conn->recv_key);
 
-			byte username[16]; // = first entry in keyfile
+			byte username[USERNAME_LENGTH];
 			std::string mname = bindy->get_master_name();
-			memcpy(username, mname.c_str(), 16);
-			conn->sock->Send(username, 16, 0);
-			conn->sock->Send((const byte*)(conn->send_iv->BytePtr()), 16, 0);
+			memcpy(username, mname.c_str(), USERNAME_LENGTH);
+			conn->sock->Send(username, USERNAME_LENGTH, 0);
+			conn->sock->Send((const byte*)(conn->send_iv->BytePtr()), AES::DEFAULT_KEYLENGTH, 0);
 
 			Message m_send1(bindy->get_nodename().length(), link_pkt::PacketInitRequest);
 			memcpy(m_send1.p_body, bindy->get_nodename().c_str(), bindy->get_nodename().length());
@@ -321,8 +320,7 @@ void socket_thread_function(void* arg) {
 				//case PacketPing:		; break; // ping functionality, maybe?
 				case link_pkt::PacketData: {
 					DEBUG( "BINDY> treating packet as data packet" );
-					std::vector<uint8_t> v;
-					v.resize(m.header.packet_length);
+					std::vector<uint8_t> v(m.header.packet_length);
 					memcpy(&v.at(0), m.p_body, v.size());
 					bindy->callback_data(conn_id, v);
 				} break;
@@ -345,6 +343,7 @@ bool set_socket_options (Socket *s) {
 bool ok = true;
 
 #if defined (WIN32) || defined(WIN64)
+/*
 	const char optval = 1;
 	tcp_keepalive lpvInBuffer;
 	int cbInBuffer = sizeof(lpvInBuffer);
@@ -364,6 +363,7 @@ bool ok = true;
 	  NULL  // completion routine
 	) );
 	ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
+	*/
 #else
 	unsigned int result;
 
@@ -444,12 +444,6 @@ Bindy::Bindy(std::string filename, bool is_server)
 	}
 	is.close();
 	this->is_server = is_server;
-
-	// Some defaults for now
-	if (is_server)
-		nodename = "server1";
-	else
-		nodename = "client1";
 };
 
 Bindy::~Bindy() {
@@ -458,17 +452,11 @@ Bindy::~Bindy() {
 	delete main_thread;
 };
 
-void Bindy::create_key (login_pair_t * login_pair) {
-	; // include AES lib and make key here
-}
-
 void Bindy::set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
-	// TODO: should we wrap it? check thread-safety
 	m_datasink = datasink;
 }
 
 void Bindy::set_discnotify(void (* discnotify)(conn_id_t) ) {
-	// TODO: same as above
 	m_discnotify = discnotify;
 }
 
@@ -517,7 +505,7 @@ conn_id_t Bindy::connect (char * addr) {
 	// Connection list is updated in socket_thread_function if handshake was successful
 }
 
-void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) { //, ...	<~~~ 4)
+void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) {
 	Message message(data.size(), link_pkt::PacketData);
 	memcpy(message.p_body, &data.at(0), message.header.packet_length);
 
@@ -532,14 +520,9 @@ void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) { //, ...	<
 	} else {
 		DEBUG( "BINDY> send to nodename = " << nodename << ", conn_id = " << conn_id << " FAILED." );
 		DEBUG( "BINDY> connection count = " << connections.size() );
-		throw std::exception(); // temp
-		/// callback_disc(conn_id); // todo: should we?
+		throw std::exception();
 	}
 }
-//result_t get_status (
-
-//	result_t merge_cloud_info (login_vector_t login_vector);//<~~~ 5)
-//	result_t change_master_key (login_pair_t login_pair);	//<~~~ 7)
 
 void Bindy::get_master_key (byte* ptr) {
 	if (login_key_map.size() == 0) {
@@ -554,13 +537,6 @@ std::string Bindy::get_master_name () {
 	}
 	return master_login.username;
 }
-
-// Sends a "message" data into "sock" socket encoded by "key" and "iv" and returns SecByteBlock IV for the next packet.
-//SecByteBlock send_init_packet(CryptoPP::Socket *sock, Message *message, SecByteBlock key, SecByteBlock iv) {
-//}
-// Receives message from "sock" socket and "iv" initialization vector parameters.
-//Message recv_init_packet(CryptoPP::Socket *sock, SecByteBlock key, SecByteBlock iv) {
-//}
 
 void Bindy::add_connection(conn_id_t conn_id, Connection * conn) {
 	mutex.lock();

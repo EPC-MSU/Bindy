@@ -167,7 +167,6 @@ public:
 	Bindy(std::string filename, bool is_active_node);
 	~Bindy();
 
-	void create_key (login_pair_t * login_pair);
 	void set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data));
 	void set_discnotify (void (* discnotify)(conn_id_t conn_id));
 	void connect (); // server method, starts listening on a socket in background and returns

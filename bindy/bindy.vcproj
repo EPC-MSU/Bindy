@@ -355,6 +355,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\circular_buffer.h"
+				>
+			</File>
+			<File
 				RelativePath=".\tinythread.h"
 				>
 			</File>

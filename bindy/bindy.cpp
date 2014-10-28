@@ -10,14 +10,6 @@
 #include <unistd.h>
 #endif
 
-// common sleep function (conditional wrapper)
-void sleep(int ms) {
-#if defined(WIN32) || defined(WIN64)
-		Sleep(ms);
-#else
-		usleep(1000 * ms);
-#endif
-}
 
 static tthread::mutex * stdout_mutex = new tthread::mutex();
 #define DEBUG(text) { ; }
@@ -57,6 +49,8 @@ Connection::Connection() {
 	this->recv_iv = new SecByteBlock(AES::BLOCKSIZE);
 	this->send_mutex = new tthread::mutex();
 	this->recv_mutex = new tthread::mutex();
+	this->buffer = new /*spm::circular_buffer<byte>;*/ std::deque<uint8_t>;
+//	this->buffer->reserve(1024); // todo parametrize
 }
 
 Connection::~Connection() {
@@ -68,6 +62,7 @@ Connection::~Connection() {
 	delete recv_iv;
 	delete send_mutex;
 	delete recv_mutex;
+	delete buffer;
 }
 
 void Bindy::assign_key_by_name(std::string name, SecByteBlock *key) {
@@ -237,6 +232,7 @@ void socket_thread_function(void* arg) {
 	Bindy * bindy = tp->class_ptr;
 	bool inits_connect = tp->inits_connect;
 	conn_id_t conn_id = tp->conn_id;
+	bool is_buffered = tp->is_buffered;
 
 	Connection *conn = new Connection();
 	conn->sock = sock;
@@ -415,11 +411,14 @@ void main_thread_function(void *arg) {
 	}
 }
 
-Bindy::Bindy(std::string filename, bool is_server)
+Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 {
 	m_datasink = NULL;
 	m_discnotify = NULL;
 	main_thread = NULL;
+	this->is_server = is_server;
+	this->is_buffered = is_buffered;
+
 	std::ifstream is (filename.data(), std::ifstream::binary);
 	if (is) {
 		is.seekg (0, is.end);
@@ -443,7 +442,6 @@ Bindy::Bindy(std::string filename, bool is_server)
 		count++;
 	}
 	is.close();
-	this->is_server = is_server;
 };
 
 Bindy::~Bindy() {
@@ -453,11 +451,13 @@ Bindy::~Bindy() {
 };
 
 void Bindy::set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
-	m_datasink = datasink;
+	if (!is_buffered)
+		m_datasink = datasink;
 }
 
 void Bindy::set_discnotify(void (* discnotify)(conn_id_t) ) {
-	m_discnotify = discnotify;
+	if (!is_buffered)
+		m_discnotify = discnotify;
 }
 
 void Bindy::connect () {
@@ -482,6 +482,7 @@ conn_id_t Bindy::connect (char * addr) {
 	tparam->sock_ptr = sock;
 	tparam->inits_connect = true;
 	tparam->connect_ok = false;
+	tparam->is_buffered = is_buffered;
 
 	mutex.lock();
 	conn_id_t new_id = 0;
@@ -524,6 +525,23 @@ void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) {
 	}
 }
 
+int Bindy::read(conn_id_t conn_id, byte * p, int size) {
+	int i = 0;
+	mutex.lock();
+	if (connections.count(conn_id) == 1) {
+		Connection * c = connections[conn_id];
+		while (i < size && !c->buffer->empty()) {
+			*(p+i) = c->buffer->front();
+			c->buffer->pop_front();
+			i++;
+		}
+	} else {
+		i = -1;
+	}
+	mutex.unlock();
+	return i;
+}
+
 void Bindy::get_master_key (byte* ptr) {
 	if (login_key_map.size() == 0) {
 		throw std::exception();
@@ -553,6 +571,36 @@ void Bindy::delete_connection(conn_id_t conn_id) {
 	mutex.unlock();
 }
 
+std::list<conn_id_t> Bindy::list_connections () {
+	mutex.lock();
+	std::list<conn_id_t> list;
+	std::map<conn_id_t,Connection*>::iterator it;
+	for (it = connections.begin(); it != connections.end(); ++it) {
+		list.push_back(it->first);
+	}
+	mutex.unlock();
+	return list;
+}
+
 void Bindy::disconnect (conn_id_t conn_id) {
 	delete_connection(conn_id);
+}
+
+void Bindy::callback_data (conn_id_t conn_id, std::vector<uint8_t> data) {
+	if (is_buffered) { // save to buffer
+		mutex.lock();
+		for (unsigned int i=0; i<data.size(); ++i) {
+			if (connections.count(conn_id) == 1)
+				connections[conn_id]->buffer->push_back(data.at(i));
+		}
+		mutex.unlock();
+	} else { // call handler
+		if (m_datasink)
+			m_datasink(conn_id, data);
+	}
+}
+
+void Bindy::callback_disc (conn_id_t conn_id) {
+	if (m_discnotify)
+		m_discnotify(conn_id);
 }

@@ -82,6 +82,7 @@ using CryptoPP::Socket;
 //#include "sqlite3.h"
 
 #include <list>
+#include "circular_buffer.h"
 
 #if defined (WIN32) || defined(WIN64)
 //
@@ -90,6 +91,14 @@ using CryptoPP::Socket;
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #endif
+
+// common sleep function (conditional define (urgh))
+#if defined(WIN32) || defined(WIN64)
+	#define sleep(ms)	Sleep(ms)
+#else
+	#define sleep(ms)	usleep(1000 * ms)
+#endif
+
 
 typedef unsigned char uint8_t;
 typedef unsigned int uint32_t; // strictly speaking this is not true...
@@ -160,11 +169,12 @@ public:
 	SecByteBlock * recv_iv;
 	tthread::mutex * send_mutex;
 	tthread::mutex * recv_mutex;
+	/*spm::circular_buffer<byte>*/ std::deque<uint8_t> * buffer;
 };
 
 class Bindy {
 public:
-	Bindy(std::string filename, bool is_active_node);
+	Bindy(std::string filename, bool is_active_node, bool is_buffered);
 	~Bindy();
 
 	void set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data));
@@ -176,8 +186,10 @@ public:
 	void get_master_key(byte* ptr);
 	std::string get_master_name();
 	bool get_is_server() { return is_server; }
-	void callback_data (conn_id_t conn_id, std::vector<uint8_t> data) { if (m_datasink) m_datasink(conn_id, data); }
-	void callback_disc (conn_id_t conn_id) { if (m_discnotify) m_discnotify(conn_id); }
+	void callback_data (conn_id_t conn_id, std::vector<uint8_t> data);
+	void callback_disc (conn_id_t conn_id);
+	std::list<conn_id_t> list_connections ();
+	int read (conn_id_t conn_id, byte * p, int size); // tries to read "size" bytes from buffer into "p"; returns amount of bytes read and removed from buffer
 	// + Getters-setters for params below
 	void set_nodename (std::string nodename) { this->nodename = nodename; }
 	std::string get_nodename (void) { return this->nodename; }
@@ -188,6 +200,7 @@ public:
 protected:
 	uint32_t max_live_tunnels;
 	bool is_server;
+	bool is_buffered;
 	// ...
 	void merge_cloud_info (login_vector_t login_vector);
 	void change_master_key (login_pair_t login_pair);
@@ -209,6 +222,7 @@ typedef struct {
 	bool inits_connect;
 	bool connect_ok;
 	conn_id_t conn_id;
+	bool is_buffered;
 } thread_param_t;
 
 std::string hex_encode(const char* s, unsigned int size);

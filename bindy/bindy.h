@@ -82,7 +82,7 @@ using CryptoPP::Socket;
 //#include "sqlite3.h"
 
 #include <list>
-#include "circular_buffer.h"
+//#include "circular_buffer.h"
 
 #if defined (WIN32) || defined(WIN64)
 //
@@ -190,6 +190,7 @@ public:
 	void callback_disc (conn_id_t conn_id);
 	std::list<conn_id_t> list_connections ();
 	int read (conn_id_t conn_id, byte * p, int size); // tries to read "size" bytes from buffer into "p"; returns amount of bytes read and removed from buffer
+	int get_data_size (conn_id_t); // returns amount of data in buffer
 	// + Getters-setters for params below
 	void set_nodename (std::string nodename) { this->nodename = nodename; }
 	std::string get_nodename (void) { return this->nodename; }

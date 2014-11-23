@@ -173,7 +173,7 @@ Message recv_packet(Connection * conn) {
 
 	d.SetKeyWithIV(*conn->recv_key, conn->recv_key->size(), *conn->recv_iv, conn->recv_iv->size());
 	try {
-		StringSource s(cipher_head, true, 
+		StringSource s(cipher_head, true,
 			new AuthenticatedDecryptionFilter(d,
 				new StringSink(recovered_head)
 			) // StreamTransformationFilter
@@ -207,7 +207,7 @@ Message recv_packet(Connection * conn) {
 	conn->recv_iv->Assign(reinterpret_cast<const byte*>(cipher_head.substr(cipher_head.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
 	d.SetKeyWithIV(*conn->recv_key, conn->recv_key->size(), *conn->recv_iv, conn->recv_iv->size());
 	try {
-		StringSource s(cipher_body, true, 
+		StringSource s(cipher_body, true,
 			new AuthenticatedDecryptionFilter(d,
 				new StringSink(recovered_body)
 			) // StreamTransformationFilter
@@ -350,8 +350,8 @@ bool ok = true;
 	ok &= (0 == WSAIoctl(
 	  *s,              // descriptor identifying a socket
 	  SIO_KEEPALIVE_VALS,                  // dwIoControlCode
-	  &lpvInBuffer,    // pointer to tcp_keepalive struct 
-	  cbInBuffer,      // length of input buffer 
+	  &lpvInBuffer,    // pointer to tcp_keepalive struct
+	  cbInBuffer,      // length of input buffer
 	  NULL,         // output buffer
 	  0,       // size of output buffer
 	  NULL,    // number of bytes returned
@@ -370,7 +370,10 @@ bool ok = true;
 
 	ok &= ( 0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)) );
 	ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)) );
+	// TODO non-portable line of code
+#ifdef __linux__
 	ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_idle, sizeof(int)) );
+#endif
 	ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)) );
 
 	// Also disable Nagle, because we want faster response and each Bindy packet is a complete packet that should be wrapped in TCP and sent right away

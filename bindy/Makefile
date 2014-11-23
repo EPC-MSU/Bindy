@@ -1,20 +1,14 @@
-CC = g++
-LIBPATH = ../crypto++/
-OUTFILE = main
-CFLAGS = -std=c++0x -lpthread -I$(LIBPATH) -L$(LIBPATH) -lcryptopp
+CRYPTOPATH = ../crypto++/
+CXXFLAGS = -std=c++0x -lpthread -I$(CRYPTOPATH)
+LDFLAGS = -L$(CRYPTOPATH)
 
-main: client-server.o tinythread.o bindy.o
-	$(CC) $(CFLAGS) -o $(OUTFILE) client-server.o tinythread.o bindy.o $(LIBPATH)/libcryptopp.a
+all: main libbindy.a
 
-client-server.o: client-server.cpp
-	$(CC) $(CFLAGS) -c client-server.cpp
+main: client-server.o tinythread.o bindy.o $(CRYPTOPATH)/libcryptopp.a
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@
 
-tinythread.o: tinythread.cpp tinythread.h
-	$(CC) $(CFLAGS) -c tinythread.cpp
-
-bindy.o: bindy.cpp bindy.h
-	$(CC) $(CFLAGS) -c bindy.cpp
-
+libbindy.a: bindy.o wrapper.o
+	$(AR) $(ARFLAGS) $@ $^
 
 clean:
-	rm -f *.o $(OUTFILE)
+	rm -f *.o *.a main

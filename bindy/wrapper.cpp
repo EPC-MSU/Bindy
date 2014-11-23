@@ -1,11 +1,14 @@
-#include "wrapper.h"
 #include "bindy.h"
+
+typedef unsigned char byte;
+#include "wrapper.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-#define SLEEP_WAIT_TIME 10
+// Timeout in milliseconds
+#define SLEEP_WAIT_TIME 10000
 
 Bindy* bindy = NULL;
 
@@ -46,15 +49,14 @@ int bindy_enumerate(unsigned int ip_addr, int enum_timeout, byte ** ptr)
 		int i2 = (ip_addr & 0x00FF0000) >> 16;
 		int i3 = (ip_addr & 0x0000FF00) >> 8;
 		int i4 = (ip_addr & 0x000000FF);
-		
-		char addr[16];
-		addr[16] = 0;
+
+		char addr[16] = {0};
 		sprintf(addr, "%d.%d.%d.%d", i1, i2, i3, i4); // because bindy uses CryptoPP sockets and they want a string
 		conn_id_t enum_conn_id = bindy->connect(addr);
 		bindy->send_data(enum_conn_id, s); // send enum request
 		int time_elapsed = 0;
 		while ( (bindy->get_data_size(enum_conn_id) == 0) && (time_elapsed < enum_timeout)) {
-			Sleep(SLEEP_WAIT_TIME);
+			sleep(SLEEP_WAIT_TIME);
 			time_elapsed += SLEEP_WAIT_TIME;
 		}
 		int recv_size = bindy->get_data_size(enum_conn_id);
@@ -65,7 +67,7 @@ int bindy_enumerate(unsigned int ip_addr, int enum_timeout, byte ** ptr)
 
 		// according to current exchange protocol specification
 		devices = (uint8_t)(buf[7]); ///todo check 17
-	
+
 		//delete[] buf;
 
 	} catch (...) {
@@ -99,7 +101,7 @@ uint32_t bindy_open(const char * addr, uint32_t serial, int open_timeout)
 	}
 	int time_elapsed = 0;
 	while ( (bindy->get_data_size(conn_id) == 0) && (time_elapsed < open_timeout) ) {
-		Sleep(SLEEP_WAIT_TIME);
+		sleep(SLEEP_WAIT_TIME);
 		time_elapsed += SLEEP_WAIT_TIME;
 	}
 
@@ -170,7 +172,7 @@ void bindy_close(conn_id_t conn_id, int close_timeout)
 	}
 	int time_elapsed = 0;
 	while ( (bindy->get_data_size(conn_id) == 0) && (time_elapsed < close_timeout)) {
-		Sleep(SLEEP_WAIT_TIME);
+		sleep(SLEEP_WAIT_TIME);
 		time_elapsed += SLEEP_WAIT_TIME;
 	}
 

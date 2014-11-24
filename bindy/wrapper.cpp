@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 // Timeout in milliseconds
-#define SLEEP_WAIT_TIME 10000
+#define SLEEP_WAIT_TIME 10
 
 Bindy* bindy = NULL;
 

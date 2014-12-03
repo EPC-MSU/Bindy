@@ -617,3 +617,15 @@ void Bindy::callback_disc (conn_id_t conn_id) {
 	if (m_discnotify)
 		m_discnotify(conn_id);
 }
+
+in_addr Bindy::get_ip(conn_id_t conn_id) {
+	in_addr ip;
+	sockaddr psa;
+	CryptoPP::socklen_t psaLen = sizeof ( psa );
+	mutex.lock();
+	connections[conn_id]->sock->GetPeerName(&psa, &psaLen);
+	if ( psa.sa_family == AF_INET )
+		ip = ((sockaddr_in*)&psa)->sin_addr;
+	mutex.unlock();
+	return ip;
+}

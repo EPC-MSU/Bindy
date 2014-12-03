@@ -85,7 +85,7 @@ using CryptoPP::Socket;
 #include "circular_buffer.h"
 
 #if defined (WIN32) || defined(WIN64)
-//
+#include <inaddr.h>
 #else
 #include <sys/types.h> 
 #include <netinet/in.h>
@@ -197,6 +197,7 @@ public:
 	void add_connection(conn_id_t conn_id, Connection * conn);
 	void delete_connection(conn_id_t conn_id);
 	void assign_key_by_name(std::string name, SecByteBlock *key);
+	in_addr get_ip(conn_id_t conn_id);
 
 protected:
 	uint32_t max_live_tunnels;

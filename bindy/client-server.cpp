@@ -63,7 +63,7 @@ int main (int argc, char *argv[]) {
 				if (len > 0) {
 					buf[len] = 0;
 					std::string str((const char*)buf);
-					std::cout << str << std::endl;
+					std::cout << "Client from host " << inet_ntoa(bindy->get_ip(*it)) << " says: " << str << std::endl;
 					std::cout.flush();
 				}
 			}

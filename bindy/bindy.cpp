@@ -542,6 +542,19 @@ int Bindy::read(conn_id_t conn_id, byte * p, int size) {
 	return i;
 }
 
+int Bindy::get_data_size (conn_id_t conn_id) {
+	int i = 0;
+	mutex.lock();
+	if (connections.count(conn_id) == 1) {
+		Connection * c = connections[conn_id];
+		i = c->buffer->size();
+	} else {
+		i = -1;
+	}
+	mutex.unlock();
+	return i;
+}
+
 void Bindy::get_master_key (byte* ptr) {
 	if (login_key_map.size() == 0) {
 		throw std::exception();

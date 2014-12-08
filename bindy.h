@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <arpa/inet.h>
 #endif
 
 namespace bindy
@@ -100,6 +101,7 @@ public:
 	std::string get_nodename (void);
 	void add_connection(conn_id_t conn_id, Connection * conn);
 	void delete_connection(conn_id_t conn_id);
+	in_addr get_ip(conn_id_t conn_id);
 
 	static void initialize_network();
 	static void shutdown_network();

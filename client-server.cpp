@@ -61,7 +61,8 @@ int main (int argc, char *argv[])
 				len = bindy->read(*it, buf, buflen);
 				if (len > 0) {
 					buf[len] = 0;
-					std::cout << (const char*)buf << std::endl;
+					std::cout << "Client from host " << inet_ntoa(bindy->get_ip(*it)) 
+						<< " says: " << (const char*)buf << std::endl;
 					std::cout.flush();
 				}
 			}

@@ -21,10 +21,11 @@ find_path(CRYPTOPP_INCLUDE_DIR aes.h
   /usr/include/
   ${CRYPTOPP_PATH}/include/
   ${CRYPTOPP_PATH}/
+	${CRYPTOPP_PATH_INCLUDE}
 )
 
 find_library(CRYPTOPP_LIBRARY
-	NAMES ${CRYPTOPP_SHARED} libcryptopp.a
+	NAMES ${CRYPTOPP_SHARED} libcryptopp.a cryptlib.lib
   PATH_SUFFIXES lib64 lib
   PATHS
   /usr/local
@@ -36,6 +37,10 @@ find_library(CRYPTOPP_LIBRARY
 if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 endif()
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+	target_link_libraries(bindy ws2_32)
+endif()
 
 # creates variables CRYPTOPP_FOUND, CRYPTOPP_LIBRARY and CRYPTOPP_INCLUDE_DIR
 include(FindPackageHandleStandardArgs)
@@ -46,12 +51,13 @@ if(NOT CRYPTOPP_FOUND)
 	message(FATAL_ERROR "Please set CRYPTOPP_PATH for custom crypto++ location")
 endif()
 
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 include_directories(${CRYPTOPP_INCLUDE_DIR})
 
 add_library(bindy SHARED bindy.cpp tinythread.cpp)
 target_link_libraries(bindy ${CRYPTOPP_LIBRARY})
+if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
+	target_link_libraries(bindy ws2_32)
+endif()
 
 add_executable(bindy-main client-server.cpp)
 target_link_libraries(bindy-main bindy)

@@ -56,12 +56,14 @@ int main (int argc, char *argv[])
 			std::list<bindy::conn_id_t>::iterator it;
 			const int buflen = 1024;
 			uint8_t buf[buflen+1];
+			char addrbuf[INET_ADDRSTRLEN];
 			int len;
 			for (it = c.begin(); it != c.end(); ++it) {
 				len = bindy->read(*it, buf, buflen);
 				if (len > 0) {
 					buf[len] = 0;
-					std::cout << "Client from host " << inet_ntoa(bindy->get_ip(*it)) 
+					std::cout << "Client from host "
+						<< inet_ntop(AF_INET, &(bindy->get_ip(*it)), addrbuf, sizeof(addrbuf)) 
 						<< " says: " << (const char*)buf << std::endl;
 					std::cout.flush();
 				}

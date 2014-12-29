@@ -55,7 +55,7 @@ static tthread::mutex * stdout_mutex = new tthread::mutex();
 #if defined(WIN32) || defined(WIN64)
 void sleep_ms(size_t ms)
 {
-	Sleep(ms);
+	Sleep((DWORD)ms);
 }
 #else
 void sleep_ms(size_t ms)
@@ -77,7 +77,12 @@ public:
 	std::string nodename; // name of this node
 	login_pair_t master_login; // root key
 
+	BindyState() { }
+	~BindyState() { }
 	void assign_key_by_name(std::string name, SecByteBlock *key);
+private:
+	BindyState(const BindyState&) = delete;
+	BindyState& operator=(const BindyState&) = delete;
 };
 
 typedef struct {
@@ -509,7 +514,7 @@ void BindyState::assign_key_by_name(std::string name, SecByteBlock *key) {
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	: port_(12345)
 {
-	bindy_state_.reset(new BindyState());
+	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = NULL;
 	bindy_state_->m_discnotify = NULL;
 	bindy_state_->main_thread = NULL;
@@ -522,7 +527,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	std::ifstream is (filename.data(), std::ifstream::binary);
 	if (is) {
 		is.seekg (0, is.end);
-		size_t length = is.tellg();
+		//std::streampos length = is.tellg();
 		is.seekg (0, is.beg);
 	} else {
 		throw std::exception();
@@ -548,7 +553,7 @@ Bindy::~Bindy() {
 	if (is_server && bindy_state_->main_thread != NULL)
 		bindy_state_->main_thread->join();
 	delete bindy_state_->main_thread;
-	bindy_state_.reset();
+	delete bindy_state_;
 };
 
 void Bindy::set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
@@ -649,7 +654,7 @@ int Bindy::get_data_size (conn_id_t conn_id) {
 	bindy_state_->mutex.lock();
 	if (bindy_state_->connections.count(conn_id) == 1) {
 		Connection * c = bindy_state_->connections[conn_id];
-		i = c->buffer->size();
+		i = static_cast<int>(c->buffer->size());
 	} else {
 		i = -1;
 	}

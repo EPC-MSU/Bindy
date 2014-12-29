@@ -7,7 +7,10 @@
 #include <string>
 #include <iostream>
 
-#if !(defined (WIN32) || defined(WIN64))
+#if defined (WIN32) || defined(WIN64)
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <unistd.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -15,17 +18,29 @@
 #include <arpa/inet.h>
 #endif
 
+// MSVC symbols export
+#if defined (WIN32) || defined(WIN64)
+  #if defined(bindy_EXPORTS)
+    #define BINDY_EXPORT __declspec(dllexport)
+  #else
+    #define BINDY_EXPORT __declspec(dllimport)
+  #endif
+#else
+ #define BINDY_EXPORT
+#endif
+
+
 namespace bindy
 {
 
 // aes-128
 const size_t AES_KEY_LENGTH = 16;
-typedef struct {
+typedef struct BINDY_EXPORT {
 	uint8_t bytes[AES_KEY_LENGTH];
 } aes_key_t;
 
 const size_t USERNAME_LENGTH = 32;
-typedef struct {
+typedef struct BINDY_EXPORT {
 	char username[USERNAME_LENGTH];
 	aes_key_t key;
 } login_pair_t;
@@ -41,7 +56,7 @@ namespace link_pkt {
 	};
 }
 
-typedef struct {
+typedef struct BINDY_EXPORT {
 	uint32_t packet_length;
 	uint8_t  packet_type;
 	uint8_t  reserved1;
@@ -51,7 +66,7 @@ typedef struct {
 
 typedef uint32_t conn_id_t;
 
-class Message {
+class BINDY_EXPORT Message {
 public:
 	Message(size_t packet_length, uint8_t packet_type);
 	Message(header_t header);
@@ -64,12 +79,12 @@ public:
 
 typedef std::vector<login_pair_t> login_vector_t;
 
-void sleep_ms(size_t ms);
+void BINDY_EXPORT sleep_ms(size_t ms);
 
-class Connection;
-class BindyState;
+class BINDY_EXPORT Connection;
+class BINDY_EXPORT BindyState;
 
-class Bindy {
+class BINDY_EXPORT Bindy {
 public:
 	Bindy(std::string filename, bool is_active_node, bool is_buffered);
 	~Bindy();
@@ -106,7 +121,6 @@ public:
 	static void initialize_network();
 	static void shutdown_network();
 
-protected:
 	const int port_;
 	bool is_server;
 	bool is_buffered;
@@ -115,10 +129,13 @@ protected:
 	void change_master_key (login_pair_t login_pair);
 
 private:
-	std::unique_ptr<BindyState> bindy_state_;
+	BindyState* bindy_state_;
 
 	friend void socket_thread_function(void* arg);
 	friend void main_thread_function(void* arg);
+
+	Bindy(const Bindy&) = delete;
+	Bindy& operator=(const Bindy&) = delete;
 };
 
 

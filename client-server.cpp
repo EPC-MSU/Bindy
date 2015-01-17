@@ -62,8 +62,9 @@ int main (int argc, char *argv[])
 				len = bindy->read(*it, buf, buflen);
 				if (len > 0) {
 					buf[len] = 0;
+					struct in_addr client_addr = bindy->get_ip(*it);
 					std::cout << "Client from host "
-						<< inet_ntop(AF_INET, &(bindy->get_ip(*it)), addrbuf, sizeof(addrbuf)) 
+						<< inet_ntop(AF_INET, &client_addr.s_addr, addrbuf, sizeof(addrbuf))
 						<< " says: " << (const char*)buf << std::endl;
 					std::cout.flush();
 				}

@@ -11,31 +11,34 @@ endif()
 # Find crypto++ library. Hinted path is CRYPTOPP_PATH
 # Set CRYPTOPP_SHARED_LIBRARY to any value to use shared library
 if(CRYPTOPP_SHARED_LIBRARY)
-    set(CRYPTOPP_SHARED cryptopp)
+	set(CRYPTOPP_SHARED cryptopp)
 endif()
 
 find_path(CRYPTOPP_INCLUDE_DIR aes.h
 	PATH_SUFFIXES cryptopp
-  PATHS
-  /usr/local/include/
-  /usr/include/
-  ${CRYPTOPP_PATH}/include/
-  ${CRYPTOPP_PATH}/
+	PATHS
+	/usr/local/include/
+	/usr/include/
+	${CRYPTOPP_PATH}/include/
+	${CRYPTOPP_PATH}/
 	${CRYPTOPP_PATH_INCLUDE}
-)
+	)
 
 find_library(CRYPTOPP_LIBRARY
 	NAMES ${CRYPTOPP_SHARED} libcryptopp.a cryptlib.lib
-  PATH_SUFFIXES lib64 lib
-  PATHS
-  /usr/local
-  /usr
-  ${CRYPTOPP_PATH}/lib
-  ${CRYPTOPP_PATH}/
-)
+	PATH_SUFFIXES lib64 lib
+	PATHS
+	/usr/local
+	/usr
+	${CRYPTOPP_PATH}/lib
+	${CRYPTOPP_PATH}/
+	)
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++0x")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -pthread")
+endif()
+if(${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++ -pthread")
 endif()
 if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")

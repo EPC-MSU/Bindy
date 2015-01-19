@@ -40,9 +40,6 @@ endif()
 if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
 endif()
-if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
-	target_link_libraries(bindy ws2_32)
-endif()
 
 # creates variables CRYPTOPP_FOUND, CRYPTOPP_LIBRARY and CRYPTOPP_INCLUDE_DIR
 include(FindPackageHandleStandardArgs)

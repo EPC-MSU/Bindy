@@ -14,39 +14,48 @@ Using Bindy
 -----------
 The project includes a tiny client-server example to test that Bindy works properly and to show how it might be used. The server accepts a "keyfile" parameter which lists all authorized client keys and starts listening on all available network interfaces for incoming connections. The client needs an "IP", a "message" and a "keyfile" parameters; it then tries to establish connection to the chosen IP address, identify itself using chosen keyfile and transmit the message. The server outputs the messages it receives from clients to standard output.
 
-Components
-----------
+Requirements
+------------
 
 Bindy is based on several open-source solutions.
 
-* Crypto++. It manages encryption and cross-platform sockets.
-* TinyThread++. Cross-platform solution for multithreading.
-* SQLite. Data storage and inquiry.
+* TinyThread++. Cross-platform solution for multithreading. Included in source code.
 
-Building the example
---------------------
-Linux and Mac OS X:
-  ensure you have g++ and make installed
-  run "make" in the project directory
+* Crypto++. It manages encryption and cross-platform sockets. External dependency.
 
-Windows with MS Visual Studio:
-  open Bindy.sln (solution)
-  choose "Debug" or "Release" configuration
-  click "Build"
+CryptoPP can be used in two modes:
+
+1. As a shared library. To use shared library invoke cmake with a `-DCRYPTOPP_SHARED_LIBRARY=TRUE` flag
+
+2. As a static library with PIC support. Please note that packaged static cryptopp is never compiled with `-fPIC` so you must compile it yourself.
+
+Special cryptopp location can be specified with `CRYPTOPP_PATH` cmake variable.
+
+Building the library and example
+--------------------------------
+
+    cmake .
+	make
 
 History
 -------
 
+* v0.3 - 2015.02.12
+ - CMake build
+ - dropped cryptopp from source code
+ - a lot of fixes
+
+* v0.2 - 2014.10.28
+ - Second release
+
 * v0.1 - 2014.10.15
  - Initial release.
+
 
 License
 -------
 
-Bindy is published under the most open license possible. Call it MIT license or public domain, whatever suits your country rules.
-
-
-Copyright (c) 2014 EPC-MSU
+Copyright (c) 2014-2015 EPC-MSU
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

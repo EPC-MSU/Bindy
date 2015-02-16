@@ -9,6 +9,7 @@ if(NO_RPATH_PACKAGING)
 endif()
 
 # Detect correct C++11 flag
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
@@ -18,6 +19,7 @@ elseif(COMPILER_SUPPORTS_CXX0X)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 else()
 	message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+endif()
 endif()
 
 

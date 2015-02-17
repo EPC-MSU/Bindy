@@ -65,7 +65,7 @@ FIND_PACKAGE_HANDLE_STANDARD_ARGS(CRYPTOPP DEFAULT_MSG CRYPTOPP_INCLUDE_DIR CRYP
 mark_as_advanced(CRYPTOPP_INCLUDE_DIR CRYPTOPP_LIBRARY)
 
 if(NOT CRYPTOPP_FOUND)
-	message(FATAL_ERROR "Please set CRYPTOPP_PATH for custom crypto++ location")
+	message(FATAL_ERROR "Please set CRYPTOPP_PATH and/or CRYPTOPP_PATH_INCLUDE for custom crypto++ location")
 endif()
 
 include_directories(${CRYPTOPP_INCLUDE_DIR})

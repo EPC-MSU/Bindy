@@ -29,13 +29,13 @@ CryptoPP can be used in two modes:
 
 2. As a static library with PIC support. Please note that packaged static cryptopp is never compiled with `-fPIC` so you must compile it yourself.
 
-Special cryptopp location can be specified with `CRYPTOPP_PATH` cmake variable.
+Special cryptopp location can be specified with `CRYPTOPP_PATH` (for library) and `CRYPTOPP_PATH_INCLUDE` (for headers) cmake variables.
 
 Building the library and example
 --------------------------------
 
     cmake .
-	make
+    make
 
 History
 -------

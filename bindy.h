@@ -46,20 +46,18 @@ typedef struct BINDY_EXPORT {
 	aes_key_t key;
 } login_pair_t;
 
-namespace link_pkt {
-	enum {
-		PacketData = 0,
-		PacketInitRequest = 1,
-		PacketInitReply = 2,
-		PacketLinkInfo = 3,
-		PacketTermRequest = 254,
-		PacketTermReply = 255
-	};
-}
+enum class link_pkt : uint8_t{
+	PacketData = 0,
+	PacketInitRequest = 1,
+	PacketInitReply = 2,
+	PacketLinkInfo = 3,
+	PacketTermRequest = 254,
+	PacketTermReply = 255
+};
 
 typedef struct BINDY_EXPORT {
 	uint32_t packet_length;
-	uint8_t  packet_type;
+	link_pkt packet_type;
 	uint8_t  reserved1;
 	uint8_t  reserved2;
 	uint8_t  reserved3;
@@ -69,7 +67,7 @@ typedef uint32_t conn_id_t;
 
 class BINDY_EXPORT Message {
 public:
-	Message(size_t packet_length, uint8_t packet_type);
+	Message(size_t packet_length, link_pkt packet_type);
 	Message(header_t header);
 	Message(const Message& other);
 	~Message();
@@ -96,13 +94,14 @@ public:
 	void connect ();
 	// Client method; each connect(addr) opens new socket to the "addr" and
 	// establishes its own encrypted channel
-	conn_id_t connect (char * addr);
-	 // Diconnect does not affect other connections to the same ip
+	conn_id_t connect (std::string addr);
+	 // Disconnect does not affect other connections to the same ip
 	void disconnect(conn_id_t conn_id);
 	void send_data (conn_id_t conn_id, std::vector<uint8_t> data);
 	void get_master_key(uint8_t* ptr);
 	std::string get_master_name();
 	bool get_is_server();
+	int port();
 	void callback_data (conn_id_t conn_id, std::vector<uint8_t> data);
 	void callback_disc (conn_id_t conn_id);
 	std::list<conn_id_t> list_connections ();
@@ -112,7 +111,7 @@ public:
 	// returns amount of data in buffer
 	int get_data_size (conn_id_t);
 
-	// + Getters-setters for parameterss
+	// + Getters-setters for parameters
 	void set_nodename (std::string nodename);
 	std::string get_nodename (void);
 	void add_connection(conn_id_t conn_id, Connection * conn);
@@ -122,15 +121,15 @@ public:
 	static void initialize_network();
 	static void shutdown_network();
 
-	const int port_;
-	bool is_server;
-	bool is_buffered;
 	// ...
 	void merge_cloud_info (login_vector_t login_vector);
 	void change_master_key (login_pair_t login_pair);
 
 private:
 	BindyState* bindy_state_;
+	const int port_;
+	const bool is_server_;
+	const bool is_buffered_;
 
 	friend void socket_thread_function(void* arg);
 	friend void main_thread_function(void* arg);

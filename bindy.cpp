@@ -64,6 +64,8 @@ void sleep_ms(size_t ms)
 }
 #endif
 
+typedef tthread::lock_guard<tthread::mutex> tlock;
+
 class BindyState
 {
 public:
@@ -139,7 +141,7 @@ Connection::~Connection() {
 
 
 
-Message::Message(size_t packet_length, uint8_t packet_type) {
+Message::Message(size_t packet_length, link_pkt packet_type) {
 	assert(packet_length <= UINT_MAX);
 	this->header.packet_length = static_cast<uint32_t>(packet_length);
 	this->header.packet_type = packet_type;
@@ -191,7 +193,8 @@ void string_set(std::string *str, uint8_t* buf, int size) {
 
 // Sends "message" data into the connection "conn". Modifies its IV in preparation for the next packet.
 void send_packet(Connection * conn, Message * message) {
-	conn->send_mutex->lock();
+
+	tlock lock(*(conn->send_mutex));
 
 	std::string plain_header, plain_body, cipher_header, cipher_body, cipher_all;
 
@@ -215,7 +218,7 @@ void send_packet(Connection * conn, Message * message) {
 		); // StringSource
 		conn->send_iv->Assign(reinterpret_cast<const uint8_t*>(cipher_body.substr(cipher_body.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
 	} catch (CryptoPP::Exception &e) {
-		std::cout << "Caught exception: " << e.what() << std::endl;
+		std::cerr << "Caught exception: " << e.what() << std::endl;
 	}
 
 	cipher_all.append(cipher_header);
@@ -227,14 +230,13 @@ void send_packet(Connection * conn, Message * message) {
 		sent = conn->sock->Send(reinterpret_cast<const uint8_t*>(cipher_all.data()), to_send, 0);
 		DEBUG( "BINDY> to send (w/headers): " << to_send << "; sent = " << sent );
 	} catch (CryptoPP::Exception &e) {
-		std::cout << "Exception. " << e.what() << std::endl;
+		std::cerr << "Exception. " << e.what() << std::endl;
 	}
-	conn->send_mutex->unlock();
 }
 
 // Receives message from connection "conn". Modifies its IV in preparation for the next packet.
 Message recv_packet(Connection * conn) {
-	conn->recv_mutex->lock();
+	tlock lock(*(conn->recv_mutex));
 	int get, rcv;
 	GCM< AES >::Decryption d;
 
@@ -248,7 +250,7 @@ Message recv_packet(Connection * conn) {
 	do {
 		get = conn->sock->Receive(&buf_head[rcv], head_enc_size - rcv, 0);
 		if (get == 0) { // The other side closed the connection
-			throw std::exception();
+			throw std::runtime_error("Error recv_packet");
 		}
 		rcv += get;
 	} while (head_enc_size - rcv > 0);
@@ -280,7 +282,7 @@ Message recv_packet(Connection * conn) {
 		get = conn->sock->Receive(p_body+rcv, body_enc_size-rcv, 0);
 		if (get == 0) { // The other side closed the connection
 			delete[] p_body;
-			throw std::exception();
+			throw std::runtime_error("Error recv_packet");
 		}
 		rcv += get;
 	} while (body_enc_size-rcv > 0);
@@ -303,8 +305,6 @@ Message recv_packet(Connection * conn) {
 		std::cerr << e.what() << std::endl;
 	}
 	conn->recv_iv->Assign(reinterpret_cast<const uint8_t*>(cipher_body.substr(cipher_body.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
-
-	conn->recv_mutex->unlock();
 
 	Message message(header);
 	assert(message.header.packet_length == recovered_body.length());
@@ -475,7 +475,7 @@ void main_thread_function(void *arg) {
 	listen_sock.Create();
 	listen_sock.Bind(classptr->port_, NULL);
 	if (! set_socket_options(&listen_sock) )  { // all connection sockets inherit required options from listening socket
-		std::cout << "Could not set socket options." << std::endl;
+		std::cerr << "Could not set socket options." << std::endl;
 		return;
 	}
 	listen_sock.Listen();
@@ -496,7 +496,7 @@ void main_thread_function(void *arg) {
 			t->detach();
 		}
 	} catch (std::exception &e) {
-		std::cout << "Caught exception: " << e.what() << std::endl;
+		std::cerr << "Caught exception: " << e.what() << std::endl;
 	}
 }
 
@@ -505,21 +505,19 @@ void BindyState::assign_key_by_name(std::string name, SecByteBlock *key) {
 		key->Assign(login_key_map[name].bytes, AES_KEY_LENGTH);
 	}
 	else {
-		throw std::exception();
+		throw std::runtime_error("Error assign_key_by_name");
 	}
 }
 
 
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
-	: port_(12345)
+	: port_(12345), is_server_(is_server), is_buffered_(is_buffered)
 {
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = NULL;
 	bindy_state_->m_discnotify = NULL;
 	bindy_state_->main_thread = NULL;
-	this->is_server = is_server;
-	this->is_buffered = is_buffered;
 
 	if (AES_KEY_LENGTH != CryptoPP::AES::DEFAULT_KEYLENGTH)
 		throw std::logic_error("AES misconfiguration, expected AES-128");
@@ -530,7 +528,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		//std::streampos length = is.tellg();
 		is.seekg (0, is.beg);
 	} else {
-		throw std::exception();
+		throw std::runtime_error("Error opening file");
 	}
 	login_pair_t login;
 	int count = 0;
@@ -550,35 +548,36 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 };
 
 Bindy::~Bindy() {
-	if (is_server && bindy_state_->main_thread != NULL)
+	if (is_server_ && bindy_state_->main_thread != NULL)
 		bindy_state_->main_thread->join();
 	delete bindy_state_->main_thread;
 	delete bindy_state_;
 };
 
 void Bindy::set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
-	if (!is_buffered)
+	if (!is_buffered_)
 		bindy_state_->m_datasink = datasink;
 }
 
 void Bindy::set_discnotify(void (* discnotify)(conn_id_t) ) {
-	if (!is_buffered)
+	if (!is_buffered_)
 		bindy_state_->m_discnotify = discnotify;
 }
 
 void Bindy::connect () {
-	if (is_server)
+	if (is_server_)
 		bindy_state_->main_thread = new tthread::thread(main_thread_function, this);
 }
 
-conn_id_t Bindy::connect (char * addr) {
+conn_id_t Bindy::connect (std::string addr) {
 	Socket * sock = NULL;
 	try {
 		sock = new Socket();
 		sock->Create();
-		sock->Connect(addr, port_);
+		if (!sock->Connect(addr.c_str(), port_))
+			throw std::runtime_error("Error connecting");
 	} catch (CryptoPP::Exception e) {
-		std::cout << "Error establishing connection. " << e.what() << std::endl;
+		std::cerr << "Error establishing connection. " << e.what() << std::endl;
 		throw e;
 	}
 	DEBUG( "BINDY> sock connect ok" );
@@ -588,16 +587,17 @@ conn_id_t Bindy::connect (char * addr) {
 	tparam->sock_ptr = sock;
 	tparam->inits_connect = true;
 	tparam->connect_ok = false;
-	tparam->is_buffered = is_buffered;
+	tparam->is_buffered = is_buffered_;
 
-	bindy_state_->mutex.lock();
 	conn_id_t new_id = 0;
-	do {
-		new_id = rand();
-	} while (bindy_state_->connections.count(new_id) != 0 || new_id == 0);
-	// id==0 is the single invalid state, so we don't return it
-	tparam->conn_id = new_id;
-	bindy_state_->mutex.unlock();
+	{
+		tlock lock(bindy_state_->mutex);
+		do {
+			new_id = rand();
+		} while (bindy_state_->connections.count(new_id) != 0 || new_id == 0);
+		// id==0 is the single invalid state, so we don't return it
+		tparam->conn_id = new_id;
+	}
 
 	tthread::thread * t = new tthread::thread(socket_thread_function, tparam);
 	t->detach();
@@ -618,60 +618,53 @@ void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) {
 	memcpy(message.p_body, &data.at(0), message.header.packet_length);
 
 	if (bindy_state_->connections.count(conn_id) == 1) { // should be 1 exactly...
-		bindy_state_->mutex.lock();
+		tlock lock(bindy_state_->mutex);
 		Connection * conn = bindy_state_->connections[conn_id];
 		DEBUG( "BINDY> sending " << data.size() << " raw bytes..." );
 		DEBUG( "BINDY> bytes =  " << hex_encode(data) );
 		send_packet(conn, &message);
 		DEBUG( "BINDY> data sent" );
-		bindy_state_->mutex.unlock();
 	} else {
 		DEBUG( "BINDY> send to nodename = " << nodename << ", conn_id = " << conn_id << " FAILED." );
 		DEBUG( "BINDY> connection count = " << bindy_state_->connections.size() );
-		throw std::exception();
+		throw std::runtime_error("Error send_data");
 	}
 }
 
 int Bindy::read(conn_id_t conn_id, uint8_t * p, int size) {
-	int i = 0;
-	bindy_state_->mutex.lock();
+	tlock lock(bindy_state_->mutex);
 	if (bindy_state_->connections.count(conn_id) == 1) {
 		Connection * c = bindy_state_->connections[conn_id];
+		int i = 0;
 		while (i < size && !c->buffer->empty()) {
 			*(p+i) = c->buffer->front();
 			c->buffer->pop_front();
 			i++;
 		}
-	} else {
-		i = -1;
+		return i;
 	}
-	bindy_state_->mutex.unlock();
-	return i;
+	return -1;
 }
 
 int Bindy::get_data_size (conn_id_t conn_id) {
-	int i = 0;
-	bindy_state_->mutex.lock();
+	tlock lock(bindy_state_->mutex);
 	if (bindy_state_->connections.count(conn_id) == 1) {
 		Connection * c = bindy_state_->connections[conn_id];
-		i = static_cast<int>(c->buffer->size());
-	} else {
-		i = -1;
+		return static_cast<int>(c->buffer->size());
 	}
-	bindy_state_->mutex.unlock();
-	return i;
+	return -1;
 }
 
 void Bindy::get_master_key (uint8_t* ptr) {
 	if (bindy_state_->login_key_map.size() == 0) {
-		throw std::exception();
+		throw std::runtime_error("Error get_master_key");
 	}
 	memcpy(ptr, &bindy_state_->master_login.key, sizeof(aes_key_t));
 }
 
 std::string Bindy::get_master_name () {
 	if (bindy_state_->login_key_map.size() == 0) {
-		throw std::exception();
+		throw std::runtime_error("Error get_master_key");
 	}
 	return bindy_state_->master_login.username;
 }
@@ -688,32 +681,34 @@ std::string Bindy::get_nodename (void)
 
 bool Bindy::get_is_server()
 {
-	return is_server;
+	return is_server_;
+}
+
+int Bindy::port()
+{
+	return port_;
 }
 
 void Bindy::add_connection(conn_id_t conn_id, Connection * conn) {
-	bindy_state_->mutex.lock();
+	tlock lock(bindy_state_->mutex);
 	bindy_state_->connections[conn_id] = conn;
-	bindy_state_->mutex.unlock();
 }
 
 void Bindy::delete_connection(conn_id_t conn_id) {
-	bindy_state_->mutex.lock();
+	tlock lock(bindy_state_->mutex);
 	if (bindy_state_->connections.count(conn_id) == 1) {
 		delete bindy_state_->connections[conn_id]; // safe, because we're under the global bindy mutex
 		bindy_state_->connections.erase(conn_id);
 	}
-	bindy_state_->mutex.unlock();
 }
 
 std::list<conn_id_t> Bindy::list_connections () {
-	bindy_state_->mutex.lock();
+	tlock lock(bindy_state_->mutex);
 	std::list<conn_id_t> list;
 	std::map<conn_id_t,Connection*>::iterator it;
 	for (it = bindy_state_->connections.begin(); it != bindy_state_->connections.end(); ++it) {
 		list.push_back(it->first);
 	}
-	bindy_state_->mutex.unlock();
 	return list;
 }
 
@@ -722,13 +717,12 @@ void Bindy::disconnect (conn_id_t conn_id) {
 }
 
 void Bindy::callback_data (conn_id_t conn_id, std::vector<uint8_t> data) {
-	if (is_buffered) { // save to buffer
-		bindy_state_->mutex.lock();
+	if (is_buffered_) { // save to buffer
+		tlock lock(bindy_state_->mutex);
 		for (unsigned int i=0; i<data.size(); ++i) {
 			if (bindy_state_->connections.count(conn_id) == 1)
 				bindy_state_->connections[conn_id]->buffer->push_back(data.at(i));
 		}
-		bindy_state_->mutex.unlock();
 	} else { // call handler
 		if (bindy_state_->m_datasink)
 			bindy_state_->m_datasink(conn_id, data);
@@ -744,11 +738,11 @@ in_addr Bindy::get_ip(conn_id_t conn_id) {
 	in_addr ip;
 	sockaddr psa;
 	CryptoPP::socklen_t psaLen = sizeof ( psa );
-	bindy_state_->mutex.lock();
-	bindy_state_->connections[conn_id]->sock->GetPeerName(&psa, &psaLen);
+	tlock lock(bindy_state_->mutex);
 	if ( psa.sa_family == AF_INET )
 		ip = ((sockaddr_in*)&psa)->sin_addr;
-	bindy_state_->mutex.unlock();
+	else
+		ip.s_addr = INADDR_NONE;
 	return ip;
 }
 

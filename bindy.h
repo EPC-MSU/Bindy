@@ -33,15 +33,14 @@
 
 namespace bindy
 {
-
 // aes-128
 const size_t AES_KEY_LENGTH = 16;
-typedef struct BINDY_EXPORT {
+typedef struct {
 	uint8_t bytes[AES_KEY_LENGTH];
 } aes_key_t;
 
 const size_t USERNAME_LENGTH = 32;
-typedef struct BINDY_EXPORT {
+typedef struct {
 	char username[USERNAME_LENGTH];
 	aes_key_t key;
 } login_pair_t;
@@ -55,90 +54,221 @@ enum class link_pkt : uint8_t{
 	PacketTermReply = 255
 };
 
-typedef struct BINDY_EXPORT {
-	uint32_t packet_length;
+/*!
+* Header type for the Message class. Contains information about message contents.
+*/
+typedef struct {
+	/*! Packet length in bytes, excluding the header size. */
+	uint32_t data_length;
+
+	/*! Packet type. */
 	link_pkt packet_type;
+	
+	/*! Reserved for future use. */
 	uint8_t  reserved1;
+
+	/*! Reserved for future use. */
 	uint8_t  reserved2;
+
+	/*! Reserved for future use. */
 	uint8_t  reserved3;
 } header_t;
 
+/*!
+* Connection identifier type definition.
+*/
 typedef uint32_t conn_id_t;
 
-class BINDY_EXPORT Message {
-public:
-	Message(size_t packet_length, link_pkt packet_type);
-	Message(header_t header);
-	Message(const Message& other);
-	~Message();
-//private:
-	header_t header;
-	uint8_t * p_body;
-};
+const conn_id_t conn_id_invalid = 0;
 
 typedef std::vector<login_pair_t> login_vector_t;
 
 void BINDY_EXPORT sleep_ms(size_t ms);
 
-class BINDY_EXPORT Connection;
-class BINDY_EXPORT BindyState;
+class Connection;
+class BindyState;
 
 class BINDY_EXPORT Bindy {
 public:
+
+	/*!
+	*	Class constructor.
+	*	@param[in] filename The full name of the file containing a list of usernames and keys. 
+	*	@param[in] is_active_node The boolean value which indicates, whether this class is the active node.
+	*	@param[in] is_buffered The boolean value which indicates whether this class uses internal buffering.
+	*	If this parameter is true, then incoming data is stored in the buffer and may be retrieved using "read" function.
+	*	If this parameter is false, then incoming data triggers callback function if the callback is set.
+	*/
 	Bindy(std::string filename, bool is_active_node, bool is_buffered);
+
+	/*!
+	*	Class destructor.
+	*	Note: calling the destructor does not immediately terminate all threads created by the class.
+	*/
 	~Bindy();
 
-	void set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data));
-	void set_discnotify (void (* discnotify)(conn_id_t conn_id));
-	 // Server method, starts listening on a socket in background and returns
+	/*!
+	*	Sets the callback function which will receive unstructured data from the peers.
+	*	@param[in] datasink Pointer to the callback function which will process the data.
+	*/
+	void set_handler(void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data));
+
+	/*!
+		Sets the callback function which is called each time Bindy detects a connection was dropped either by another party or as a result of network failure.
+		@param[in] discnotify Pointer to the callback function which will process the disconnect notifications.
+	*/
+	void set_discnotify(void(*discnotify)(conn_id_t conn_id));
+
+	/*!
+		Server method, starts listening on a socket in background and returns.
+	*/
 	void connect ();
-	// Client method; each connect(addr) opens new socket to the "addr" and
-	// establishes its own encrypted channel
+
+	/*!
+		Client method; each call to this function opens new socket to the host and establishes its own encrypted channel.
+		@param[in] addr The IPv4 address or hostname to connect to.
+		\return The handle to the created connection. Equals "conn_id_invalid" in case connection could not be established.
+	*/
 	conn_id_t connect (std::string addr);
-	 // Disconnect does not affect other connections to the same ip
-	void disconnect(conn_id_t conn_id);
+	
+	/*!
+		Disconnects the channel identified by connection id.
+		Call to this function does not affect other connections to the same host.
+		@param[in] conn_id Connection identifier.
+	*/
+	void disconnect (conn_id_t conn_id);
+
+	/*!
+		Sends data into the established connection.
+		@param[in] conn_id Connection identifier.
+		@param[in] data The data to send.
+	*/
 	void send_data (conn_id_t conn_id, std::vector<uint8_t> data);
-	void get_master_key(uint8_t* ptr);
-	std::string get_master_name();
-	bool get_is_server();
+
+	/*!
+		Function to test whether this instance of Bindy class acts as a server (accepts connections).
+		\return Boolean value, true is this class is server.
+		*/
+	bool is_server();
+
+	/*!
+		Returns the port number which is used by Bindy to listen for connections.
+		\return Port number.
+	*/
 	int port();
-	void callback_data (conn_id_t conn_id, std::vector<uint8_t> data);
-	void callback_disc (conn_id_t conn_id);
-	std::list<conn_id_t> list_connections ();
-	// Try to read "size" bytes from buffer into "p"
-	// Returns amount of bytes read and removed from buffer
+
+	/*!
+		Returns the list of active connections.
+		\return The list of connection identifiers.
+	*/
+	std::list<conn_id_t> list_connections();
+
+	/*!
+		Tries to read "size" bytes from buffer into "p"; returns amount of bytes read and removed from buffer.
+		Used only with buffered mode.
+		@param[in] conn_id Connection identifier.
+		@param[out] p Pointer to the read buffer. Should be able to hold at least "size" bytes.
+		@param[in] size Amount of bytes requested.
+		\return Amount of bytes read.
+	*/
 	int read (conn_id_t conn_id, uint8_t * p, int size);
-	// returns amount of data in buffer
+
+	/*!
+		Returns amount of data in the buffer of connection identified by "conn_id".
+		Used only with buffered mode.
+		@param[in] conn_id Connection identifier.
+		\return Size of data in buffer in bytes.
+	*/
 	int get_data_size (conn_id_t);
 
-	// + Getters-setters for parameters
-	void set_nodename (std::string nodename);
-	std::string get_nodename (void);
-	void add_connection(conn_id_t conn_id, Connection * conn);
-	void delete_connection(conn_id_t conn_id);
+	/*!
+		Returns the ip address of the peer of connection identified by "conn_id".
+		@param[in] conn_id Connection identifier.
+		\return Structure which contains peer address.
+	*/
 	in_addr get_ip(conn_id_t conn_id);
 
+	/*!
+	*/
 	static void initialize_network();
+
+	/*!
+	*/
 	static void shutdown_network();
 
-	// ...
+	/*
+	// not used yet
 	void merge_cloud_info (login_vector_t login_vector);
 	void change_master_key (login_pair_t login_pair);
+	*/
 
 private:
+	friend class Connection;
 	BindyState* bindy_state_;
 	const int port_;
 	const bool is_server_;
 	const bool is_buffered_;
 
-	friend void socket_thread_function(void* arg);
+	/*!
+	* Main thread of the Bindy class. Listens on an opened socket, accepts connections and spawns socket threads.
+	*/
 	friend void main_thread_function(void* arg);
 
 	Bindy(const Bindy&) = delete;
 	Bindy& operator=(const Bindy&) = delete;
+
+	/*!
+	*/
+	void set_nodename(std::string nodename);
+
+	/*!
+	*/
+	std::string get_nodename(void);
+
+	/*!
+	get_master_name
+	@param[out] name description
+	*/
+	std::string get_master_login_username();
+
+	/*!
+	get key from user name
+	@param[in] name description
+	@param[out] name description
+	*/
+	std::pair<bool, aes_key_t> key_by_name(std::string name);
+
+	/*!
+	callback_data
+	@param[in] name description
+	@param[in] name description
+	*/
+	void callback_data(conn_id_t conn_id, std::vector<uint8_t> data);
+
+	/*!
+	callback_disc
+	@param[in] name description
+	*/
+	void callback_disc(conn_id_t conn_id);
+
+	/*!
+		Internal method which adds connection to the connection table of the class.
+	@param[in] name description
+	@param[in] name description
+	*/
+	void add_connection(conn_id_t conn_id, Connection * conn);
+
+	/*!
+		Internal method which deletes the connection from the connection table by its identifier.
+	@param[in] name description
+	*/
+	void delete_connection(conn_id_t conn_id);
 };
 
 
+/*!
+	The helper class. Used to initialize and shutdown network using RAII idiom.
+*/
 class BindyNetworkInitializer
 {
 	BindyNetworkInitializer(const BindyNetworkInitializer&);

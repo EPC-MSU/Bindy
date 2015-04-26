@@ -6,7 +6,10 @@ https://github.com/EPC-MSU/Bindy
 About
 -----
 
-Bindy is a lightweight cross-platform framework for cloud service written in C++ language. We haven't found any lightweight solutions to create stable peer-to-peer networks with encryption. A lot of great and big projects aim at either distributed cloud calculation, file sharing, or messaging. We do not aim to solve any of these tasks, but to provide easy-to-use, cross-platform, and well documented C++ library to **bind** computers into a cloud network, that can keep and synchronize arbitrary data, manage access rules, and encrypt connections.
+Bindy is a lightweight cross-platform framework for cloud service written in C++ language. We haven't found any lightweight solutions to create stable peer-to-peer networks with encryption. A lot of great and big projects aim at either distributed cloud calculation, file sharing, or messaging. We do not aim to solve any of these tasks, but to provide easy-to-use, cross-platform, and well documented C++ library to **bind** computers into a cloud network, that can keep and synchronize arbitrary data, manage access rules, and encrypt connections with symmetrical AES algorithm.
+
+Each node is either active node (server-cloud), or passive node(client). Both nodes uses databases files as parameters to keep all authorized node names, link data, and other relevant cloud information. The active node starts listening on all available network interfaces for incoming connections. The passive node tries to establish connection to an arbitrary active node of the cloud, finding it using the information in its database. After handshake we have a working encrypted tunnel. Both nodes can transmit messages now.
+You can also use low level "predefined IP" mode to establish connection to the specific node.
 
 This project is developed in EPC-MSU by professional developers for internal purposes. The project was created originally free, since we earn money from other products. Let this code be used for good.
 

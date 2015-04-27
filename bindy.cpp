@@ -342,7 +342,7 @@ Message SharedStatus::recv_packet()
 		return conn->recv_packet();
 	}
 	else
-		throw std::exception("Connection is dead");
+		throw std::runtime_error("Connection is dead");
 }
 
 void SharedStatus::callback_data(std::vector<uint8_t> data)
@@ -374,12 +374,6 @@ Connection::~Connection() {
 	delete buffer;
 }
 
-void Connection::init() {
-	this->status = new SharedStatus(this);
-
-	tthread::thread * t = new tthread::thread(socket_thread_function, this);
-	t->detach();
-}
 
 
 
@@ -387,7 +381,7 @@ Message::Message(size_t data_length, link_pkt packet_type, const char* ptr) {
 	assert(data_length + sizeof(header_t) <= UINT_MAX);
 	this->header.data_length = static_cast<uint32_t>(data_length);
 	this->header.packet_type = packet_type;
-	
+
 	p_body = new uint8_t[header.data_length];
 	if (header.data_length > 0)
 		memcpy(this->p_body, ptr, header.data_length);
@@ -707,6 +701,13 @@ void socket_thread_function(void* arg) {
 	}
 }
 
+void Connection::init() {
+	this->status = new SharedStatus(this);
+
+	tthread::thread * t = new tthread::thread(socket_thread_function, this);
+	t->detach();
+}
+
 bool set_socket_options (Socket *s) {
 bool ok = true;
 
@@ -914,7 +915,7 @@ conn_id_t Bindy::connect (std::string addr) {
 
 void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) {
 	Message message(data.size(), link_pkt::PacketData, reinterpret_cast<const char*>( &data.at(0) ));
-	
+
 	if (bindy_state_->connections.count(conn_id) == 1) { // should be 1 exactly...
 		tlock lock(bindy_state_->mutex);
 		Connection * conn = bindy_state_->connections[conn_id];

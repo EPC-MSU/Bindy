@@ -114,85 +114,87 @@ public:
 	void set_handler(void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data));
 
 	/*!
-		Sets the callback function which is called each time Bindy detects a connection was dropped either by another party or as a result of network failure.
-		@param[in] discnotify Pointer to the callback function which will process the disconnect notifications.
+	*	Sets the callback function which is called each time Bindy detects a connection was dropped either by another party or as a result of network failure.
+	*	@param[in] discnotify Pointer to the callback function which will process the disconnect notifications.
 	*/
 	void set_discnotify(void(*discnotify)(conn_id_t conn_id));
 
 	/*!
-		Server method, starts listening on a socket in background and returns.
+	*	Server method, starts listening on a socket in background and returns.
 	*/
 	void connect ();
 
 	/*!
-		Client method; each call to this function opens new socket to the host and establishes its own encrypted channel.
-		@param[in] addr The IPv4 address or hostname to connect to.
-		\return The handle to the created connection. Equals "conn_id_invalid" in case connection could not be established.
+	*	Client method; each call to this function opens new socket to the host and establishes its own encrypted channel.
+	*	@param[in] addr The IPv4 address or hostname to connect to.
+	*	\return The handle to the created connection. Equals "conn_id_invalid" in case connection could not be established.
 	*/
 	conn_id_t connect (std::string addr);
 	
 	/*!
-		Disconnects the channel identified by connection id.
-		Call to this function does not affect other connections to the same host.
-		@param[in] conn_id Connection identifier.
+	*	Disconnects the channel identified by connection id.
+	*	Call to this function does not affect other connections to the same host.
+	*	@param[in] conn_id Connection identifier.
 	*/
 	void disconnect (conn_id_t conn_id);
 
 	/*!
-		Sends data into the established connection.
-		@param[in] conn_id Connection identifier.
-		@param[in] data The data to send.
+	*	Sends data into the established connection.
+	*	@param[in] conn_id Connection identifier.
+	*	@param[in] data The data to send.
 	*/
 	void send_data (conn_id_t conn_id, std::vector<uint8_t> data);
 
 	/*!
-		Function to test whether this instance of Bindy class acts as a server (accepts connections).
-		\return Boolean value, true is this class is server.
-		*/
+	*	Function to test whether this instance of Bindy class acts as a server (accepts connections).
+	*	\return Boolean value, true is this class is server.
+	*/
 	bool is_server();
 
 	/*!
-		Returns the port number which is used by Bindy to listen for connections.
-		\return Port number.
+	*	Returns the port number which is used by Bindy to listen for connections.
+	*	\return Port number.
 	*/
 	int port();
 
 	/*!
-		Returns the list of active connections.
-		\return The list of connection identifiers.
+	*	Returns the list of active connections.
+	*	\return The list of connection identifiers.
 	*/
 	std::list<conn_id_t> list_connections();
 
 	/*!
-		Tries to read "size" bytes from buffer into "p"; returns amount of bytes read and removed from buffer.
-		Used only with buffered mode.
-		@param[in] conn_id Connection identifier.
-		@param[out] p Pointer to the read buffer. Should be able to hold at least "size" bytes.
-		@param[in] size Amount of bytes requested.
-		\return Amount of bytes read.
+	*	Tries to read "size" bytes from buffer into "p"; returns amount of bytes read and removed from buffer.
+	*	Used only with buffered mode.
+	*	@param[in] conn_id Connection identifier.
+	*	@param[out] p Pointer to the read buffer. Should be able to hold at least "size" bytes.
+	*	@param[in] size Amount of bytes requested.
+	*	\return Amount of bytes read.
 	*/
 	int read (conn_id_t conn_id, uint8_t * p, int size);
 
 	/*!
-		Returns amount of data in the buffer of connection identified by "conn_id".
-		Used only with buffered mode.
-		@param[in] conn_id Connection identifier.
-		\return Size of data in buffer in bytes.
+	*	Returns amount of data in the buffer of connection identified by "conn_id".
+	*	Used only with buffered mode.
+	*	@param[in] conn_id Connection identifier.
+	*	\return Size of data in buffer in bytes.
 	*/
 	int get_data_size (conn_id_t);
 
 	/*!
-		Returns the ip address of the peer of connection identified by "conn_id".
-		@param[in] conn_id Connection identifier.
-		\return Structure which contains peer address.
+	*	Returns the ip address of the peer of connection identified by "conn_id".
+	*	@param[in] conn_id Connection identifier.
+	*	\return Structure which contains peer address.
 	*/
 	in_addr get_ip(conn_id_t conn_id);
 
 	/*!
+	*	Calls CryptoPP platform-dependent network socket initializer.
 	*/
 	static void initialize_network();
 
 	/*!
+	*	Calls CryptoPP platform-dependent network socket de-initializer.
 	*/
 	static void shutdown_network();
 
@@ -218,56 +220,60 @@ private:
 	Bindy& operator=(const Bindy&) = delete;
 
 	/*!
+	*	Sets name of this node.
+	*	@param[in] nodename Node name string.
 	*/
 	void set_nodename(std::string nodename);
 
 	/*!
+	*	Outputs name of this node.
+	*	\return Node name string.
 	*/
 	std::string get_nodename(void);
 
 	/*!
-	get_master_name
-	@param[out] name description
+	*	Outputs username of the root user.
+	*	\return name description
 	*/
 	std::string get_master_login_username();
 
 	/*!
-	get key from user name
-	@param[in] name description
-	@param[out] name description
+	*	Finds key by user name.
+	*	@param[in] Username.
+	*	\return  A pair of values, if the first is true then the second contains valid key for this username.
 	*/
 	std::pair<bool, aes_key_t> key_by_name(std::string name);
 
 	/*!
-	callback_data
-	@param[in] name description
-	@param[in] name description
+	*	Internal method for sending data.
+	*	@param[in] conn_id Connection identifier.
+	*	@param[in] data The data to send.
 	*/
 	void callback_data(conn_id_t conn_id, std::vector<uint8_t> data);
 
 	/*!
-	callback_disc
-	@param[in] name description
+	*	Internal disconnect method.
+	*	@param[in] conn_id Connection identifier.
 	*/
 	void callback_disc(conn_id_t conn_id);
 
 	/*!
-		Internal method which adds connection to the connection table of the class.
-	@param[in] name description
-	@param[in] name description
+	*	Internal method which adds connection to the connection table of the class.
+	*	@param[in] conn_id Connection identifier.
+	*	@param[in] Connection Pointer to the connection class, associated with this connection.
 	*/
 	void add_connection(conn_id_t conn_id, Connection * conn);
 
 	/*!
-		Internal method which deletes the connection from the connection table by its identifier.
-	@param[in] name description
+	*	Internal method which deletes the connection from the connection table by its identifier.
+	*	@param[in] conn_id Connection identifier.
 	*/
 	void delete_connection(conn_id_t conn_id);
 };
 
 
 /*!
-	The helper class. Used to initialize and shutdown network using RAII idiom.
+*	The helper class. Used to initialize and shutdown network using RAII idiom.
 */
 class BindyNetworkInitializer
 {

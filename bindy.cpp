@@ -133,33 +133,39 @@ public:
 		tlock(mutex);
 		this->conn_id = id;
 		if (map.count(conn_id) == 0) {
-			map[conn_id] = 1;
-		} else {
-			++map[conn_id];
+			map[conn_id] = 0;
 		}
+		map_prev[conn_id] = map[conn_id];
+		++map[conn_id];
 	}
 	Countable(Countable const&) = delete;
 	Countable& operator=(Countable const&) = delete;
 	virtual ~Countable() {
 		tlock(mutex);
-		if (map.count(conn_id) > 1) {
+		if (map.count(conn_id) == 1 && map[conn_id] > 1) {
+			map_prev[conn_id] = map[conn_id];
 			--map[conn_id];
 		} else {
 			map.erase(conn_id);
+			map_prev.erase(conn_id);
 		}
 	}
 	unsigned int count() {
 		tlock(mutex);
-		if (map.count(conn_id) == 0)
-			return 0;
 		return map[conn_id];
+	}
+	unsigned int count_prev() {
+		tlock(mutex);
+		return map_prev[conn_id];
 	}
 private:
 	conn_id_t conn_id;
 	static std::map<conn_id_t, unsigned int> map;
+	static std::map<conn_id_t, unsigned int> map_prev;
 	static tthread::mutex mutex;
 };
 std::map<conn_id_t, unsigned int> Countable::map;
+std::map<conn_id_t, unsigned int> Countable::map_prev;
 
 
 
@@ -330,7 +336,7 @@ void SharedStatus::add_connection()
 void SharedStatus::delete_connection()
 {
 	tlock(mutex);
-	if (count() == 2) {
+	if ( (count() == 1) && (count_prev() == 2) ) {
 		conn->delete_connection();
 	}
 }
@@ -342,7 +348,7 @@ Message SharedStatus::recv_packet()
 		return conn->recv_packet();
 	}
 	else
-		throw std::runtime_error("Connection is dead");
+		throw std::runtime_error("Connection is either not fully initialized or already half-dead");
 }
 
 void SharedStatus::callback_data(std::vector<uint8_t> data)
@@ -367,6 +373,15 @@ Connection::Connection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool 
 }
 
 Connection::~Connection() {
+#ifdef _MSC_VER
+	int how = SD_BOTH;
+#else
+	int how = SHUT_RDWR;
+#endif
+	sock->ShutDown(how);
+	while (status->count() > 1) {
+		sleep_ms(1);
+	}
 	delete status;
 
 	sock->CloseSocket();

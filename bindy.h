@@ -85,6 +85,7 @@ typedef std::vector<login_pair_t> login_vector_t;
 
 void BINDY_EXPORT sleep_ms(size_t ms);
 
+class SuperConnection;
 class Connection;
 class BindyState;
 
@@ -262,7 +263,7 @@ private:
 	*	@param[in] conn_id Connection identifier.
 	*	@param[in] Connection Pointer to the connection class, associated with this connection.
 	*/
-	void add_connection(conn_id_t conn_id, Connection * conn);
+	void add_connection(conn_id_t conn_id, SuperConnection * conn);
 
 	/*!
 	*	Internal method which deletes the connection from the connection table by its identifier.

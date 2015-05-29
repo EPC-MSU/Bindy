@@ -113,7 +113,7 @@ public:
 
 	std::map<std::string, aes_key_t> login_key_map;
 	tthread::thread * main_thread;
-	std::map<conn_id_t, Connection*> connections;
+	std::map<conn_id_t, SuperConnection*> connections;
 	tthread::mutex mutex; // global mutex
 	std::string nodename; // name of this node
 	login_pair_t master_login; // root key
@@ -130,42 +130,51 @@ class Countable
 {
 public:
 	Countable(conn_id_t id)	{
-		tlock(mutex);
+		tlock(global_mutex);
 		this->conn_id = id;
 		if (map.count(conn_id) == 0) {
 			map[conn_id] = 0;
 		}
 		map_prev[conn_id] = map[conn_id];
 		++map[conn_id];
+		mutexes[conn_id] = new tthread::mutex();
 	}
 	Countable(Countable const&) = delete;
 	Countable& operator=(Countable const&) = delete;
 	virtual ~Countable() {
-		tlock(mutex);
+		tlock(global_mutex);
 		if (map.count(conn_id) == 1 && map[conn_id] > 1) {
 			map_prev[conn_id] = map[conn_id];
 			--map[conn_id];
 		} else {
 			map.erase(conn_id);
 			map_prev.erase(conn_id);
+			delete mutexes[conn_id];
+			mutexes.erase(conn_id);
 		}
 	}
 	unsigned int count() {
-		tlock(mutex);
+		tlock(global_mutex);
 		return map[conn_id];
 	}
 	unsigned int count_prev() {
-		tlock(mutex);
+		tlock(global_mutex);
 		return map_prev[conn_id];
+	}
+	tthread::mutex* mutex() {
+		return mutexes[conn_id];
 	}
 private:
 	conn_id_t conn_id;
 	static std::map<conn_id_t, unsigned int> map;
 	static std::map<conn_id_t, unsigned int> map_prev;
-	static tthread::mutex mutex;
+	static std::map<conn_id_t, tthread::mutex*> mutexes;
+	static tthread::mutex global_mutex;
 };
 std::map<conn_id_t, unsigned int> Countable::map;
 std::map<conn_id_t, unsigned int> Countable::map_prev;
+std::map<conn_id_t, tthread::mutex*> Countable::mutexes;
+tthread::mutex Countable::global_mutex;
 
 
 
@@ -192,31 +201,14 @@ private:
 
 
 
-class SharedStatus : public Countable {
-public:
-	SharedStatus(Connection *conn);
-	~SharedStatus();
-
-	void initial_exchange();
-	void add_connection();
-	void delete_connection();
-	Message recv_packet();
-	void callback_data(std::vector<uint8_t> data);
-
-private:
-	tthread::mutex mutex;
-	Connection * conn;
-
-};
-
 /*!
 * Class which contains information about a single connection.
 */
-class Connection {
+class Connection : public Countable {
 public:
 	Connection(Bindy* bindy, Socket* _socket, conn_id_t conn_id, bool inits);
 	~Connection();
-
+	Connection(Connection* other);
 	/*!
 	* Initializes shared socket.
 	*/
@@ -248,26 +240,14 @@ public:
 	void buffer_write(std::vector<uint8_t> data);
 
 	/*!
-	* Informs Bindy that this connection is established.
-	*/
-	void add_connection();
-
-	/*!
-	* Informs Bindy that this connection is being destroyed.
-	*/
-	void delete_connection();
-
-	/*!
 	* Sends callback data from thread to the Bindy class through the Connection class intermediary.
 	*/
 	void callback_data(std::vector<uint8_t> data);
 
 	/*!
-	* Returns connection identifier.
+	* Helper method to establish connection.
 	*/
-	conn_id_t id() {
-		return conn_id;
-	}
+	void initial_exchange();
 
 private:
 	Connection(const Connection& other);
@@ -275,122 +255,95 @@ private:
 
 	Bindy * bindy;
 	Socket * sock;
-	SharedStatus * status;
-	CryptoPP::SecByteBlock send_key;
-	CryptoPP::SecByteBlock recv_key;
-	CryptoPP::SecByteBlock send_iv;
-	CryptoPP::SecByteBlock recv_iv;
-	tthread::mutex send_mutex;
-	tthread::mutex recv_mutex;
+	CryptoPP::SecByteBlock * send_key;
+	CryptoPP::SecByteBlock * recv_key;
+	CryptoPP::SecByteBlock * send_iv;
+	CryptoPP::SecByteBlock * recv_iv;
+	tthread::mutex *send_mutex;
+	tthread::mutex *recv_mutex;
 	std::deque<uint8_t> * buffer;
 	conn_id_t conn_id;
 	bool inits_connect;
 
-	void initial_exchange();
 	in_addr get_ip();
 
 	friend class Bindy;
-	friend class SharedStatus;
 	friend void socket_thread_function(void* arg);
 };
 
-SharedStatus::SharedStatus(Connection * conn) : Countable(conn->id())
+class SuperConnection : public Connection {
+public:
+	SuperConnection(Bindy* bindy, Socket* _socket, conn_id_t conn_id, bool inits);
+	~SuperConnection();
+};
+
+SuperConnection::SuperConnection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect)
+ : Connection(_bindy, _socket, conn_id, _inits_connect)
 {
-	this->conn = conn;
-
-	Socket *sock = conn->sock;
-	CryptoPP::socket_t rawsock = sock->DetachSocket();
-
-	struct timeval timeout;
-	timeout.tv_sec = 5;
-	timeout.tv_usec = 0;
-
-	if (setsockopt(rawsock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout)) < 0)
-		throw "setsockopt failed";
-	if (setsockopt(rawsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0)
-		throw "setsockopt failed";
-
-	sock->AttachSocket(rawsock);
+	initial_exchange();
+	tthread::thread * t = new tthread::thread(socket_thread_function, this);
+	t->detach();
 }
 
-SharedStatus::~SharedStatus() 
-{
+SuperConnection::~SuperConnection() {
 }
 
-void SharedStatus::initial_exchange()
-{
-	tlock(mutex);
-	if (count() == 2) {
-		conn->initial_exchange();
+Connection::Connection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect) : Countable(conn_id) {
+	if (count() == 1) {
+		this->inits_connect = _inits_connect;
+		this->bindy = _bindy;
+		this->sock = _socket;
+		this->conn_id = conn_id;
+		this->send_key = new CryptoPP::SecByteBlock(AES::DEFAULT_KEYLENGTH);
+		this->recv_key = new CryptoPP::SecByteBlock(AES::DEFAULT_KEYLENGTH);
+		this->send_iv = new CryptoPP::SecByteBlock(AES::BLOCKSIZE);
+		this->recv_iv = new CryptoPP::SecByteBlock(AES::BLOCKSIZE);
+		this->send_mutex = new tthread::mutex();
+		this->recv_mutex = new tthread::mutex();
+		this->buffer = new std::deque<uint8_t>;
 	}
 }
 
-void SharedStatus::add_connection()
-{
-	tlock(mutex);
-	if (count() == 2) {
-		conn->add_connection();
+Connection::Connection(Connection* other) : Countable(other->conn_id) {
+	if (count() > 1) {
+		this->inits_connect = other->inits_connect;
+		this->bindy = other->bindy;
+		this->sock = other->sock;
+		this->conn_id = other->conn_id;
+		this->send_key = other->send_key;
+		this->recv_key = other->recv_key;
+		this->send_iv = other->send_iv;
+		this->recv_iv = other->recv_iv;
+		this->send_mutex = other->send_mutex;
+		this->recv_mutex = other->recv_mutex;
+		this->buffer = other->buffer;
 	}
-}
-
-void SharedStatus::delete_connection()
-{
-	tlock(mutex);
-	if ( (count() == 1) && (count_prev() == 2) ) {
-		conn->delete_connection();
-	}
-}
-
-Message SharedStatus::recv_packet()
-{
-	tlock(mutex);
-	if (count() == 2) {
-		return conn->recv_packet();
-	}
-	else
-		throw std::runtime_error("Connection is either not fully initialized or already half-dead");
-}
-
-void SharedStatus::callback_data(std::vector<uint8_t> data)
-{
-	tlock(mutex);
-	if (count() == 2) {
-		conn->callback_data(data);
-	}
-}
-
-Connection::Connection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect) {
-	this->inits_connect = _inits_connect;
-	this->bindy = _bindy;
-	this->sock = _socket;
-	this->conn_id = conn_id;
-	this->send_key = CryptoPP::SecByteBlock(AES::DEFAULT_KEYLENGTH);
-	this->recv_key = CryptoPP::SecByteBlock(AES::DEFAULT_KEYLENGTH);
-	this->send_iv = CryptoPP::SecByteBlock(AES::BLOCKSIZE);
-	this->recv_iv = CryptoPP::SecByteBlock(AES::BLOCKSIZE);
-	this->buffer = new std::deque<uint8_t>;
-	this->status = nullptr;
 }
 
 Connection::~Connection() {
+	tlock(*mutex());
+	if (count() == 2) {
+		int how;
 #ifdef _MSC_VER
-	int how = SD_BOTH;
+		how = SD_BOTH;
 #else
-	int how = SHUT_RDWR;
+		how = SHUT_RDWR;
 #endif
-	sock->ShutDown(how);
-	while (status->count() > 1) {
-		sleep_ms(1);
+		sock->ShutDown(how);
 	}
-	delete status;
+	else if (count() == 1) {
+		sock->CloseSocket();
+		delete sock;
+		delete buffer;
 
-	sock->CloseSocket();
-	delete sock;
-	delete buffer;
+		delete send_key;
+		delete recv_key;
+		delete send_iv;
+		delete recv_iv;
+		delete send_mutex;
+		delete recv_mutex;
+	}
 }
-
-
-
 
 Message::Message(size_t data_length, link_pkt packet_type, const char* ptr) {
 	assert(data_length + sizeof(header_t) <= UINT_MAX);
@@ -446,7 +399,7 @@ link_pkt Message::packet_type() {
 // Sends "message" data into the connection. Modifies connection IV in preparation for the next packet.
 void Connection::send_packet(Message * message) {
 
-	tlock lock(send_mutex);
+	tlock lock(*send_mutex);
 
 	std::string plain_header, plain_body, cipher_header, cipher_body, cipher_all;
 
@@ -455,20 +408,20 @@ void Connection::send_packet(Message * message) {
 
 	CryptoPP::GCM< AES >::Encryption e;
 	try {
-		e.SetKeyWithIV(send_key, send_key.size(), send_iv, send_iv.size());
+		e.SetKeyWithIV(*send_key, send_key->size(), *send_iv, send_iv->size());
 		StringSource(plain_header, true,
 			new CryptoPP::AuthenticatedEncryptionFilter(e,
 				new StringSink(cipher_header)
 			) // StreamTransformationFilter
 		); // StringSource
-		send_iv.Assign(reinterpret_cast<const uint8_t*>(cipher_header.substr(cipher_header.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
-		e.SetKeyWithIV(send_key, send_key.size(), send_iv, send_iv.size());
+		send_iv->Assign(reinterpret_cast<const uint8_t*>(cipher_header.substr(cipher_header.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
+		e.SetKeyWithIV(*send_key, send_key->size(), *send_iv, send_iv->size());
 		StringSource(plain_body, true,
 			new CryptoPP::AuthenticatedEncryptionFilter(e,
 				new StringSink(cipher_body)
 			) // StreamTransformationFilter
 		); // StringSource
-		send_iv.Assign(reinterpret_cast<const uint8_t*>(cipher_body.substr(cipher_body.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
+		send_iv->Assign(reinterpret_cast<const uint8_t*>(cipher_body.substr(cipher_body.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
 	} catch (CryptoPP::Exception &e) {
 		std::cerr << "Caught exception (encryption): " << e.what() << std::endl;
 		throw e;
@@ -490,7 +443,7 @@ void Connection::send_packet(Message * message) {
 
 // Receives message from connection. Modifies connection IV in preparation for the next packet.
 Message Connection::recv_packet() {
-	tlock lock(recv_mutex);
+	tlock lock(*recv_mutex);
 	int get, rcv;
 	CryptoPP::GCM< AES >::Decryption d;
 
@@ -513,7 +466,7 @@ Message Connection::recv_packet() {
 	std::string cipher_head, recovered_head;
 	string_set(&cipher_head, buf_head, head_enc_size);
 
-	d.SetKeyWithIV(recv_key, recv_key.size(), recv_iv, recv_iv.size());
+	d.SetKeyWithIV(*recv_key, recv_key->size(), *recv_iv, recv_iv->size());
 	try {
 		StringSource s(cipher_head, true,
 			new CryptoPP::AuthenticatedDecryptionFilter(d,
@@ -547,8 +500,8 @@ Message Connection::recv_packet() {
 	string_set(&cipher_body, p_body, rcv);
 	delete[] p_body;
 
-	recv_iv.Assign(reinterpret_cast<const uint8_t*>(cipher_head.substr(cipher_head.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
-	d.SetKeyWithIV(recv_key, recv_key.size(), recv_iv, recv_iv.size());
+	recv_iv->Assign(reinterpret_cast<const uint8_t*>(cipher_head.substr(cipher_head.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
+	d.SetKeyWithIV(*recv_key, recv_key->size(), *recv_iv, recv_iv->size());
 	try {
 		StringSource s(cipher_body, true,
 			new CryptoPP::AuthenticatedDecryptionFilter(d,
@@ -560,7 +513,7 @@ Message Connection::recv_packet() {
 		std::cerr << "Caught exception (decryption): " << e.what() << std::endl;
 		throw e;
 	}
-	recv_iv.Assign(reinterpret_cast<const uint8_t*>(cipher_body.substr(cipher_body.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
+	recv_iv->Assign(reinterpret_cast<const uint8_t*>(cipher_body.substr(cipher_body.length() - AES::BLOCKSIZE, AES::BLOCKSIZE).data()), AES::BLOCKSIZE);
 
 	assert(header.data_length == recovered_body.length());
 	Message message(header, recovered_body.c_str());
@@ -589,19 +542,9 @@ void Connection::buffer_write(std::vector<uint8_t> data)
 		buffer->push_back(data.at(i));
 }
 
-void Connection::add_connection()
-{
-	bindy->add_connection(this->conn_id, this);
-}
-
 void Connection::callback_data(std::vector<uint8_t> data)
 {
 	bindy->callback_data(this->conn_id, data);
-}
-
-void Connection::delete_connection()
-{
-	bindy->disconnect(this->conn_id);
 }
 
 void Connection::initial_exchange()
@@ -620,11 +563,11 @@ void Connection::initial_exchange()
 			throw std::runtime_error("key not found");
 		aes_key_t key = pair.second;
 
-		send_key.Assign(key.bytes, AES_KEY_LENGTH);
-		recv_key.Assign(key.bytes, AES_KEY_LENGTH);
+		send_key->Assign(key.bytes, AES_KEY_LENGTH);
+		recv_key->Assign(key.bytes, AES_KEY_LENGTH);
 
-		sock->Receive(recv_iv.BytePtr(), AES::DEFAULT_KEYLENGTH, 0);
-		send_iv.Assign(recv_iv);
+		sock->Receive(recv_iv->BytePtr(), AES::DEFAULT_KEYLENGTH, 0);
+		send_iv->Assign(*recv_iv);
 
 		Message m_recv1 = recv_packet();
 		remote_nodename = m_recv1.data_string();
@@ -640,8 +583,8 @@ void Connection::initial_exchange()
 	}
 	else { // this party initiates the connection
 		CryptoPP::AutoSeededRandomPool prng;
-		prng.GenerateBlock(send_iv, send_iv.size());
-		recv_iv.Assign(send_iv);
+		prng.GenerateBlock(*send_iv, send_iv->size());
+		recv_iv->Assign(*send_iv);
 
 		// Authorize ourselves here
 		std::string name = bindy->get_master_login_username();
@@ -650,15 +593,15 @@ void Connection::initial_exchange()
 			throw std::runtime_error("key not found");
 		aes_key_t key = pair.second;
 
-		send_key.Assign(key.bytes, AES_KEY_LENGTH);
-		recv_key.Assign(key.bytes, AES_KEY_LENGTH);
+		send_key->Assign(key.bytes, AES_KEY_LENGTH);
+		recv_key->Assign(key.bytes, AES_KEY_LENGTH);
 
 
 		uint8_t username[USERNAME_LENGTH];
 		std::string mname = bindy->get_master_login_username();
 		memcpy(username, mname.c_str(), USERNAME_LENGTH);
 		sock->Send(username, USERNAME_LENGTH, 0);
-		sock->Send((const uint8_t*)(send_iv.BytePtr()), AES::DEFAULT_KEYLENGTH, 0);
+		sock->Send((const uint8_t*)(send_iv->BytePtr()), AES::DEFAULT_KEYLENGTH, 0);
 
 		std::string nodename = bindy->get_nodename();
 		Message m_send1(nodename.length(), link_pkt::PacketInitRequest, nodename.c_str());
@@ -688,22 +631,16 @@ in_addr Connection::get_ip() {
 }
 
 void socket_thread_function(void* arg) {
-	SharedStatus status((Connection*)arg);
-
+	Connection* conn = nullptr;
 	try {
-		status.initial_exchange();
-
-		// We are connected. Now update the list of connected nodes
-		status.add_connection();
-
-		// Connection established, now listen for messages and reply.
+		conn = new Connection((Connection*)arg);
 		while (true) { // actually: while m.packet_type != PacketLinkTermRequest
-			Message m = status.recv_packet();
+			Message m = conn->recv_packet();
 
 			//Process packet contents
 			switch (m.packet_type()) {
 				case link_pkt::PacketData: {
-					status.callback_data(m.data_vector());
+					conn->callback_data(m.data_vector());
 				} break;
 				default: {
 					DEBUG( "stf: unknown packet received, ignoring" );
@@ -712,16 +649,10 @@ void socket_thread_function(void* arg) {
 		}
 	} catch (...) {
 		DEBUG( "Caught exception, deleting connection..." );
-		status.delete_connection();
 	}
+	delete conn;
 }
 
-void Connection::init() {
-	this->status = new SharedStatus(this);
-
-	tthread::thread * t = new tthread::thread(socket_thread_function, this);
-	t->detach();
-}
 
 bool set_socket_options (Socket *s) {
 bool ok = true;
@@ -797,7 +728,7 @@ void main_thread_function(void *arg) {
 			conn_id++;
 			try {
 				// connection will add itself to bindy list after successfull initial exchange
-				(new Connection(bindy, sock, conn_id, false))->init();
+				new SuperConnection(bindy, sock, conn_id, false);
 			}
 			catch (...) {
 				; /// failed connection attempt either due to key being rejected or ... ?
@@ -888,7 +819,7 @@ void Bindy::connect () {
 
 conn_id_t Bindy::connect (std::string addr) {
 	Socket * sock = nullptr;
-	Connection *c = nullptr;
+	SuperConnection *sc = nullptr;
 	try {
 		sock = new Socket();
 		sock->Create();
@@ -905,26 +836,17 @@ conn_id_t Bindy::connect (std::string addr) {
 			conn_id = rand();
 		} while (bindy_state_->connections.count(conn_id) != 0 || conn_id == conn_id_invalid);
 		// id==0==conn_id_invalid is the single invalid state, so we don't return it
+		try {
+			DEBUG( "creating connection ..." );
+			sc = new SuperConnection(this, sock, conn_id, true);
+			bindy_state_->connections[conn_id] = sc;
+		}
+		catch (...) { // ?
+			; // same as server listen thread
+			DEBUG( "Error creating and/or initializing connection" );
+			return conn_id_invalid;
+		}
 	}
-	try {
-		DEBUG( "creating connection ..." );
-		(c = new Connection(this, sock, conn_id, true))->init();
-	}
-	catch (...) { // ?
-		; // same as server listen thread
-		DEBUG( "creating connection error" );
-	}
-
-	int sleep_count = 0, sleep_time = 1;
-	while (bindy_state_->connections.count(conn_id) == 0 /* && sleep_time*sleep_count < timeout */) {
-		sleep_ms(sleep_time);
-		sleep_count++;
-	}
-	if (bindy_state_->connections.count(conn_id) == 0) {
-		delete c;
-		return conn_id_invalid;
-	}
-	DEBUG( "waited " << sleep_count << " * " << sleep_time << "ms intervals to connect" );
 	return conn_id;
 }
 
@@ -933,10 +855,10 @@ void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) {
 
 	if (bindy_state_->connections.count(conn_id) == 1) { // should be 1 exactly...
 		tlock lock(bindy_state_->mutex);
-		Connection * conn = bindy_state_->connections[conn_id];
+		SuperConnection * sconn = bindy_state_->connections[conn_id];
 		DEBUG( "sending " << data.size() << " raw bytes..." );
 		DEBUG( "bytes =  " << hex_encode(data) );
-		conn->send_packet(&message);
+		sconn->send_packet(&message);
 		DEBUG( "data sent" );
 	} else {
 		throw std::runtime_error("Error in send_data");
@@ -986,9 +908,9 @@ int Bindy::port()
 	return port_;
 }
 
-void Bindy::add_connection(conn_id_t conn_id, Connection * conn) {
+void Bindy::add_connection(conn_id_t conn_id, SuperConnection * sconn) {
 	tlock lock(bindy_state_->mutex);
-	bindy_state_->connections[conn_id] = conn;
+	bindy_state_->connections[conn_id] = sconn;
 }
 
 void Bindy::delete_connection(conn_id_t conn_id) {
@@ -1002,7 +924,7 @@ void Bindy::delete_connection(conn_id_t conn_id) {
 std::list<conn_id_t> Bindy::list_connections () {
 	tlock lock(bindy_state_->mutex);
 	std::list<conn_id_t> list;
-	std::map<conn_id_t,Connection*>::iterator it;
+	std::map<conn_id_t,SuperConnection*>::iterator it;
 	for (it = bindy_state_->connections.begin(); it != bindy_state_->connections.end(); ++it) {
 		list.push_back(it->first);
 	}

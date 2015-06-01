@@ -271,6 +271,7 @@ private:
 	friend void socket_thread_function(void* arg);
 };
 
+void socket_thread_function(void* arg);
 class SuperConnection : public Connection {
 public:
 	SuperConnection(Bindy* bindy, Socket* _socket, conn_id_t conn_id, bool inits);

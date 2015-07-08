@@ -96,9 +96,11 @@ public:
 	*	Class constructor.
 	*	@param[in] filename The full name of the file containing a list of usernames and keys. 
 	*	@param[in] is_active_node The boolean value which indicates, whether this class is the active node.
+	*	If this parameter is true, then this node is an active node which listens to and accepts connections.
+	*	If this parameter is false, then this node is a passive node, which will only connect to other nodes when connect() method is called.
 	*	@param[in] is_buffered The boolean value which indicates whether this class uses internal buffering.
 	*	If this parameter is true, then incoming data is stored in the buffer and may be retrieved using "read" function.
-	*	If this parameter is false, then incoming data triggers callback function if the callback is set.
+	*	If this parameter is false, then incoming data immediately triggers callback function if the callback is set.
 	*/
 	Bindy(std::string filename, bool is_active_node, bool is_buffered);
 
@@ -216,6 +218,7 @@ private:
 	* Main thread of the Bindy class. Listens on an opened socket, accepts connections and spawns socket threads.
 	*/
 	friend void main_thread_function(void* arg);
+	friend void broadcast_thread_function(void* arg);
 
 	Bindy(const Bindy&) = delete;
 	Bindy& operator=(const Bindy&) = delete;

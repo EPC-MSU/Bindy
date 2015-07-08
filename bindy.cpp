@@ -74,6 +74,12 @@ void sleep_ms(size_t ms)
 /*! Lock guard short type definition. */
 typedef tthread::lock_guard<tthread::mutex> tlock;
 
+/* Broadcast data struct definition */
+typedef struct bcast_data_t {
+	std::vector<uint8_t> data;
+	std::string addr;
+} bcast_data_t;
+
 /*! This function takes a pointer to an array of chars and its size and returns its representation in hex as a string. */
 std::string hex_encode(const char* s, size_t size) {
 	std::string encoded;
@@ -113,8 +119,10 @@ public:
 
 	std::map<std::string, aes_key_t> login_key_map;
 	tthread::thread * main_thread;
+	tthread::thread * bcast_thread;
 	std::map<conn_id_t, SuperConnection*> connections;
 	tthread::mutex mutex; // global mutex
+	tthread::mutex interlock_mutex; // mutex to sync betweern listening TCP and UDP threads
 	std::string nodename; // name of this node
 	login_pair_t master_login; // root key
 
@@ -176,7 +184,7 @@ std::map<conn_id_t, unsigned int> Countable::map_prev;
 std::map<conn_id_t, tthread::mutex*> Countable::mutexes;
 tthread::mutex Countable::global_mutex;
 
-
+int conn_id = conn_id_invalid; // used in tcp- and udp-listen thread functions
 
 
 /*!
@@ -247,7 +255,7 @@ public:
 	/*!
 	* Helper method to establish connection.
 	*/
-	void initial_exchange();
+	void initial_exchange(bcast_data_t bcast_data);
 
 private:
 	Connection(const Connection& other);
@@ -274,14 +282,14 @@ private:
 void socket_thread_function(void* arg);
 class SuperConnection : public Connection {
 public:
-	SuperConnection(Bindy* bindy, Socket* _socket, conn_id_t conn_id, bool inits);
+	SuperConnection(Bindy* bindy, Socket* _socket, conn_id_t conn_id, bool inits, bcast_data_t bcast_data);
 	~SuperConnection();
 };
 
-SuperConnection::SuperConnection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect)
+SuperConnection::SuperConnection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect, bcast_data_t bcast_data)
  : Connection(_bindy, _socket, conn_id, _inits_connect)
 {
-	initial_exchange();
+	initial_exchange(bcast_data);
 	tthread::thread * t = new tthread::thread(socket_thread_function, this);
 	t->detach();
 }
@@ -330,11 +338,20 @@ Connection::~Connection() {
 #else
 		how = SHUT_RDWR;
 #endif
-		sock->ShutDown(how);
+		if (sock) {
+			try {
+				sock->ShutDown(how);
+			}
+			catch (CryptoPP::Socket::Err) {
+				DEBUG("Socket shutdown failed for reason " << e.what() << ". Likely the other side closed connection first.");
+			}
+		}
 	}
 	else if (count() == 1) {
-		sock->CloseSocket();
-		delete sock;
+		if (sock) {
+			sock->CloseSocket();
+			delete sock;
+		}
 		delete buffer;
 
 		delete send_key;
@@ -548,27 +565,55 @@ void Connection::callback_data(std::vector<uint8_t> data)
 	bindy->callback_data(this->conn_id, data);
 }
 
-void Connection::initial_exchange()
+void Connection::initial_exchange(bcast_data_t bcast_data)
 {
 	std::string remote_nodename;
+
+	bool use_bcast = (sock == nullptr);
+
 	if (!inits_connect) { // this party accepts the connection
 		// Initial exchange
 		uint8_t username[USERNAME_LENGTH + 1];
-		sock->Receive(username, USERNAME_LENGTH, 0);
+		memset(username, 0, sizeof(username));
+		if (use_bcast) {
+			memcpy(username, reinterpret_cast<const void*>(&bcast_data.data.at(0)), USERNAME_LENGTH);
+		}
+		else {
+			sock->Receive(username, USERNAME_LENGTH, 0);
+		}
 		username[USERNAME_LENGTH] = '\0';
 
 		// Authorization happens here
 		std::string name((const char*)username);
 		std::pair<bool, aes_key_t> pair = bindy->key_by_name(name);
-		if (pair.first == false)
+		if (pair.first == false) {
 			throw std::runtime_error("key not found");
+		}
 		aes_key_t key = pair.second;
 
 		send_key->Assign(key.bytes, AES_KEY_LENGTH);
 		recv_key->Assign(key.bytes, AES_KEY_LENGTH);
 
-		sock->Receive(recv_iv->BytePtr(), AES::DEFAULT_KEYLENGTH, 0);
+		if (use_bcast) {
+			memcpy(recv_iv->BytePtr(), reinterpret_cast<const void*>(&bcast_data.data.at(USERNAME_LENGTH)), AES_KEY_LENGTH);
+		}
+		else {
+			sock->Receive(recv_iv->BytePtr(), AES_KEY_LENGTH, 0);
+		}
 		send_iv->Assign(*recv_iv);
+
+		// The tcp socket is still null, connect it first
+		if (use_bcast) {
+			sock = new Socket();
+			sock->Create(SOCK_STREAM);
+			DEBUG("Connecting to " << bcast_data.addr);
+			if (!sock->Connect(bcast_data.addr.c_str(), bindy->port())) {
+				DEBUG("Connect fail");
+			}
+			else {
+				DEBUG("Connect ok");
+			}
+		}
 
 		Message m_recv1 = recv_packet();
 		remote_nodename = m_recv1.data_string();
@@ -601,8 +646,44 @@ void Connection::initial_exchange()
 		uint8_t username[USERNAME_LENGTH];
 		std::string mname = bindy->get_master_login_username();
 		memcpy(username, mname.c_str(), USERNAME_LENGTH);
-		sock->Send(username, USERNAME_LENGTH, 0);
-		sock->Send((const uint8_t*)(send_iv->BytePtr()), AES::DEFAULT_KEYLENGTH, 0);
+		if (use_bcast) {
+			uint8_t bc_packet[USERNAME_LENGTH + AES_KEY_LENGTH];
+			memcpy(bc_packet, username, USERNAME_LENGTH);
+			memcpy(bc_packet + USERNAME_LENGTH, send_iv->BytePtr(), AES_KEY_LENGTH);
+			// accept incoming connection(s?) from server(s?) who will hear our broadcast and want to talk back
+			Socket listen_sock;
+			listen_sock.Create(SOCK_STREAM);
+			listen_sock.Bind(bindy->port_,NULL);
+			listen_sock.Listen();
+			
+			// send a broadcast itself
+			Socket bcast_sock;
+			bcast_sock.Create(SOCK_DGRAM);
+			std::string addr("255.255.255.255"); // todo check: does this properly route on lin & win?
+			if (!bcast_sock.Connect(addr.c_str(), bindy->port_)) {
+				throw std::runtime_error("Error establishing connection.");
+			}
+			bcast_sock.Send(bc_packet, sizeof(bc_packet), NULL);
+
+			// wait for reply
+			timeval t;
+			t.tv_sec = 5;
+			t.tv_usec = 0;
+			if (listen_sock.ReceiveReady(&t)) {
+				sock = new Socket();
+				sock->Create(SOCK_STREAM);
+				listen_sock.Accept(*sock); // The sock is now connected, use it to continue exchange
+			}
+			else { // we timed out and no one wanted to talk to us
+				throw std::runtime_error("Timeout waiting for broadcast reply.");
+			}
+
+			listen_sock.CloseSocket();
+		}
+		else {
+			sock->Send(username, USERNAME_LENGTH, 0);
+			sock->Send((const uint8_t*)(send_iv->BytePtr()), AES_KEY_LENGTH, 0);
+		}
 
 		std::string nodename = bindy->get_nodename();
 		Message m_send1(nodename.length(), link_pkt::PacketInitRequest, nodename.c_str());
@@ -705,9 +786,11 @@ bool ok = true;
 
 void main_thread_function(void *arg) {
 	Bindy* bindy = (Bindy*)arg;
+
 	Socket listen_sock;
 	try {
-		listen_sock.Create();
+		DEBUG("Creating TCP listen socket...");
+		listen_sock.Create(SOCK_STREAM);
 		listen_sock.Bind(bindy->port(), NULL);
 	} catch (std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
@@ -719,19 +802,28 @@ void main_thread_function(void *arg) {
 	}
 	listen_sock.Listen();
 
-	int conn_id = conn_id_invalid;
 	try {
 		while (true) {
 			Socket *sock = new Socket;
-			sock->Create();
+			sock->Create(SOCK_STREAM);
 			listen_sock.Accept(*sock);
 
-			conn_id++;
+			conn_id_t local_conn_id;
+			{
+				tlock(bindy->bindy_state_->interlock_mutex);
+				local_conn_id = conn_id;
+				conn_id++;
+			}
+
 			try {
-				// connection will add itself to bindy list after successfull initial exchange
-				new SuperConnection(bindy, sock, conn_id, false);
+				bcast_data_t empty;
+				empty.addr = std::string();
+				empty.data = std::vector<uint8_t>();
+				SuperConnection *sc = new SuperConnection(bindy, sock, local_conn_id, false, empty);
+				bindy->add_connection(local_conn_id, sc);
 			}
 			catch (...) {
+				DEBUG("Error creating and/or initializing connection in main_thread");
 				; /// failed connection attempt either due to key being rejected or ... ?
 			}
 		}
@@ -739,6 +831,65 @@ void main_thread_function(void *arg) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 	}
 	listen_sock.CloseSocket();
+}
+
+void broadcast_thread_function(void *arg) {
+	Bindy* bindy = (Bindy*)arg;
+
+	Socket bcast_sock;
+	try {
+		DEBUG( "Creating UDP listen socket..." );
+		bcast_sock.Create(SOCK_DGRAM);
+		bcast_sock.Bind(bindy->port(), NULL);
+	} catch (std::exception &e) {
+		std::cerr << "Caught exception: " << e.what() << std::endl;
+		throw e;
+	}
+
+	bool recv_ok = true;
+	try {
+		while (recv_ok) {
+			char setuprq[USERNAME_LENGTH + AES_KEY_LENGTH];
+			//unsigned int size = bcast_sock.Receive(setuprq, sizeof (setuprq), NULL);
+			// Cannot use Cryptopp wrapper here because it doesn't provide src addr for broadcasts
+			struct sockaddr from;
+			socklen_t fromlen = sizeof(from);
+			unsigned int size = recvfrom(bcast_sock, setuprq, sizeof(setuprq), NULL, &from, &fromlen);
+			struct sockaddr_in from_in = *(sockaddr_in*)&from;
+			char addrbuf[INET_ADDRSTRLEN];
+			if (from.sa_family == AF_INET) {
+				inet_ntop(AF_INET, &from_in.sin_addr, addrbuf, sizeof(addrbuf));
+				DEBUG("received broadcast from " << addrbuf << ", size = " << size);
+			}
+			else {
+				DEBUG("unknown address family");
+				break;
+			}
+
+			conn_id_t local_conn_id;
+			{
+				tlock(bindy->bindy_state_->interlock_mutex);
+				local_conn_id = conn_id;
+				conn_id++;
+			}
+
+			try {
+				bcast_data_t not_empty;
+				not_empty.addr = std::string(addrbuf);
+				not_empty.data = std::vector<uint8_t>(setuprq, setuprq+size);
+				SuperConnection *sc = new SuperConnection(bindy, nullptr, local_conn_id, false, not_empty);
+				bindy->add_connection(local_conn_id, sc);
+			}
+			catch (...) {
+				DEBUG("Error creating and/or initializing connection in broadcast_thread");
+				; /// failed connection attempt either due to key being rejected or ... ?
+			}
+		}
+	} catch (std::exception &e) {
+		std::cerr << "Caught exception: " << e.what() << std::endl;
+	}
+	bcast_sock.CloseSocket();
+	
 }
 
 std::pair<bool, aes_key_t> Bindy::key_by_name(std::string name) {
@@ -756,12 +907,13 @@ std::pair<bool, aes_key_t> Bindy::key_by_name(std::string name) {
 
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
-	: port_(12345), is_server_(is_server), is_buffered_(is_buffered)
+	: port_(49150), is_server_(is_server), is_buffered_(is_buffered)
 {
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = nullptr;
 	bindy_state_->m_discnotify = nullptr;
 	bindy_state_->main_thread = nullptr;
+	bindy_state_->bcast_thread = nullptr;
 
 	if (AES_KEY_LENGTH != CryptoPP::AES::DEFAULT_KEYLENGTH)
 		throw std::logic_error("AES misconfiguration, expected AES-128");
@@ -792,9 +944,14 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 };
 
 Bindy::~Bindy() {
-	if (is_server_ && bindy_state_->main_thread != nullptr)
-		bindy_state_->main_thread->join();
+	if (is_server_) {
+		if (bindy_state_->main_thread != nullptr)
+			bindy_state_->main_thread->join();
+		if (bindy_state_->bcast_thread != nullptr)
+			bindy_state_->bcast_thread->join();
+	}
 	delete bindy_state_->main_thread;
+	delete bindy_state_->bcast_thread;
 	delete bindy_state_;
 };
 
@@ -813,39 +970,69 @@ void Bindy::set_discnotify(void (* discnotify)(conn_id_t) ) {
 */
 void Bindy::connect () {
 	tlock lock(bindy_state_->mutex);
-	if (is_server_ && bindy_state_->main_thread == nullptr) {
-		bindy_state_->main_thread = new tthread::thread(main_thread_function, this);
+	if (is_server_) {
+		if (bindy_state_->main_thread == nullptr) {
+			bindy_state_->main_thread = new tthread::thread(main_thread_function, this);
+		}
+		if (bindy_state_->bcast_thread == nullptr) {
+			bindy_state_->bcast_thread = new tthread::thread(broadcast_thread_function, this);
+		}
 	}
 }
 
 conn_id_t Bindy::connect (std::string addr) {
 	Socket * sock = nullptr;
 	SuperConnection *sc = nullptr;
-	try {
-		sock = new Socket();
-		sock->Create();
-		if (!sock->Connect(addr.c_str(), port_))
-			throw std::runtime_error("Error establishing connection.");
-	} catch (CryptoPP::Exception &e) {
-		std::cerr << e.what() << std::endl;
-		throw e;
-	}
-	conn_id_t conn_id = conn_id_invalid;
-	{
+	if (addr.empty()) { // use broadcast to connect somewhere
 		tlock lock(bindy_state_->mutex);
 		do {
 			conn_id = rand();
 		} while (bindy_state_->connections.count(conn_id) != 0 || conn_id == conn_id_invalid);
 		// id==0==conn_id_invalid is the single invalid state, so we don't return it
 		try {
-			DEBUG( "creating connection ..." );
-			sc = new SuperConnection(this, sock, conn_id, true);
+			DEBUG( "creating connection for udp init..." );
+			bcast_data_t empty;
+			empty.addr = std::string();
+			empty.data = std::vector<uint8_t>();
+			sc = new SuperConnection(this, nullptr, conn_id, true, empty);
 			bindy_state_->connections[conn_id] = sc;
 		}
 		catch (...) { // ?
 			; // same as server listen thread
-			DEBUG( "Error creating and/or initializing connection" );
+			DEBUG( "Error creating and/or initializing connection in connect() over udp" );
 			return conn_id_invalid;
+		}
+	} else { // try to connect to the specified host
+		try {
+			DEBUG("using tcp to connect to " << addr);
+			sock = new Socket();
+			sock->Create(SOCK_STREAM);
+			if (!sock->Connect(addr.c_str(), port_))
+				throw std::runtime_error("Error establishing connection.");
+		} catch (CryptoPP::Exception &e) {
+			std::cerr << e.what() << std::endl;
+			throw e;
+		}
+
+		{
+			tlock lock(bindy_state_->mutex);
+			do {
+				conn_id = rand();
+			} while (bindy_state_->connections.count(conn_id) != 0 || conn_id == conn_id_invalid);
+			// id==0==conn_id_invalid is the single invalid state, so we don't return it
+			try {
+				DEBUG( "creating connection for tcp init..." );
+				bcast_data_t empty;
+				empty.addr = std::string();
+				empty.data = std::vector<uint8_t>();
+				sc = new SuperConnection(this, sock, conn_id, true, empty);
+				bindy_state_->connections[conn_id] = sc;
+			}
+			catch (...) { // ?
+				; // same as server listen thread
+				DEBUG( "Error creating and/or initializing connection in connect() over tcp" );
+				return conn_id_invalid;
+			}
 		}
 	}
 	return conn_id;

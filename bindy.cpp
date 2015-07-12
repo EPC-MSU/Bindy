@@ -663,7 +663,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 			if (!bcast_sock.Connect(addr.c_str(), bindy->port_)) {
 				throw std::runtime_error("Error establishing connection.");
 			}
-			bcast_sock.Send(bc_packet, sizeof(bc_packet), NULL);
+			bcast_sock.Send(bc_packet, sizeof(bc_packet), 0);
 
 			// wait for reply
 			timeval t;
@@ -854,7 +854,7 @@ void broadcast_thread_function(void *arg) {
 			// Cannot use Cryptopp wrapper here because it doesn't provide src addr for broadcasts
 			struct sockaddr from;
 			socklen_t fromlen = sizeof(from);
-			unsigned int size = recvfrom(bcast_sock, setuprq, sizeof(setuprq), NULL, &from, &fromlen);
+			unsigned int size = recvfrom(bcast_sock, setuprq, sizeof(setuprq), 0, &from, &fromlen);
 			struct sockaddr_in from_in = *(sockaddr_in*)&from;
 			char addrbuf[INET_ADDRSTRLEN];
 			if (from.sa_family == AF_INET) {

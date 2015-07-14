@@ -856,9 +856,9 @@ void broadcast_thread_function(void *arg) {
 			socklen_t fromlen = sizeof(from);
 			unsigned int size = recvfrom(bcast_sock, setuprq, sizeof(setuprq), 0, &from, &fromlen);
 			struct sockaddr_in from_in = *(sockaddr_in*)&from;
-			char addrbuf[INET_ADDRSTRLEN];
+			std::string addrbuf;
 			if (from.sa_family == AF_INET) {
-				inet_ntop(AF_INET, &from_in.sin_addr, addrbuf, sizeof(addrbuf));
+				addrbuf = inet_ntoa(from_in.sin_addr);
 				DEBUG("received broadcast from " << addrbuf << ", size = " << size);
 			}
 			else {
@@ -875,7 +875,7 @@ void broadcast_thread_function(void *arg) {
 
 			try {
 				bcast_data_t not_empty;
-				not_empty.addr = std::string(addrbuf);
+				not_empty.addr = addrbuf;
 				not_empty.data = std::vector<uint8_t>(setuprq, setuprq+size);
 				SuperConnection *sc = new SuperConnection(bindy, nullptr, local_conn_id, false, not_empty);
 				bindy->add_connection(local_conn_id, sc);

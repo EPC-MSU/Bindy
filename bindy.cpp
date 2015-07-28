@@ -272,6 +272,7 @@ private:
 	std::deque<uint8_t> * buffer;
 	conn_id_t conn_id;
 	bool inits_connect;
+	void disconnect_self();
 
 	in_addr get_ip();
 
@@ -712,6 +713,10 @@ in_addr Connection::get_ip() {
 	return ip;
 }
 
+void Connection::disconnect_self() {
+	bindy->disconnect(conn_id);
+}
+
 void socket_thread_function(void* arg) {
 	Connection* conn = nullptr;
 	try {
@@ -732,6 +737,7 @@ void socket_thread_function(void* arg) {
 	} catch (...) {
 		DEBUG( "Caught exception, deleting connection..." );
 	}
+	conn->disconnect_self();
 	delete conn;
 }
 

@@ -342,7 +342,7 @@ Connection::~Connection() {
 			try {
 				sock->ShutDown(how);
 			}
-			catch (CryptoPP::Socket::Err) {
+			catch (CryptoPP::Socket::Err &e) {
 				DEBUG("Socket shutdown failed for reason " << e.what() << ". Likely the other side closed connection first.");
 			}
 		}
@@ -655,7 +655,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 			listen_sock.Create(SOCK_STREAM);
 			listen_sock.Bind(bindy->port_,NULL);
 			listen_sock.Listen();
-			
+
 			// send a broadcast itself
 			Socket bcast_sock;
 			bcast_sock.Create(SOCK_DGRAM);
@@ -889,7 +889,6 @@ void broadcast_thread_function(void *arg) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 	}
 	bcast_sock.CloseSocket();
-	
 }
 
 std::pair<bool, aes_key_t> Bindy::key_by_name(std::string name) {

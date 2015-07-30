@@ -138,7 +138,7 @@ class Countable
 {
 public:
 	Countable(conn_id_t id)	{
-		tlock(global_mutex);
+		tlock lock(global_mutex);
 		this->conn_id = id;
 		if (map.count(conn_id) == 0) {
 			map[conn_id] = 0;
@@ -150,7 +150,7 @@ public:
 	Countable(Countable const&) = delete;
 	Countable& operator=(Countable const&) = delete;
 	virtual ~Countable() {
-		tlock(global_mutex);
+		tlock lock(global_mutex);
 		if (map.count(conn_id) == 1 && map[conn_id] > 1) {
 			map_prev[conn_id] = map[conn_id];
 			--map[conn_id];
@@ -162,11 +162,11 @@ public:
 		}
 	}
 	unsigned int count() {
-		tlock(global_mutex);
+		tlock lock(global_mutex);
 		return map[conn_id];
 	}
 	unsigned int count_prev() {
-		tlock(global_mutex);
+		tlock lock(global_mutex);
 		return map_prev[conn_id];
 	}
 	tthread::mutex* mutex() {
@@ -331,7 +331,7 @@ Connection::Connection(Connection* other) : Countable(other->conn_id) {
 }
 
 Connection::~Connection() {
-	tlock(*mutex());
+	tlock lock(*mutex());
 	if (count() == 2) {
 		int how;
 #ifdef _MSC_VER
@@ -816,7 +816,7 @@ void main_thread_function(void *arg) {
 
 			conn_id_t local_conn_id;
 			{
-				tlock(bindy->bindy_state_->interlock_mutex);
+				tlock lock(bindy->bindy_state_->interlock_mutex);
 				local_conn_id = conn_id;
 				conn_id++;
 			}
@@ -874,7 +874,7 @@ void broadcast_thread_function(void *arg) {
 
 			conn_id_t local_conn_id;
 			{
-				tlock(bindy->bindy_state_->interlock_mutex);
+				tlock lock(bindy->bindy_state_->interlock_mutex);
 				local_conn_id = conn_id;
 				conn_id++;
 			}

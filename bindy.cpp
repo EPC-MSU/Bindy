@@ -208,6 +208,24 @@ private:
 };
 
 
+bool set_socket_broadcast (Socket *s) {
+	bool ok = true;
+#ifdef __linux__
+	int optval = 1;
+	ok = ( 0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)) );
+#endif
+	return ok;
+}
+
+bool set_socket_reuseaddr (Socket *s) {
+	bool ok = true;
+#ifdef __linux__
+	int optval = 1;
+	ok = ( 0 == setsockopt(*s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) );
+#endif
+	return ok;
+}
+
 
 /*!
 * Class which contains information about a single connection.
@@ -654,17 +672,20 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 			// accept incoming connection(s?) from server(s?) who will hear our broadcast and want to talk back
 			Socket listen_sock;
 			listen_sock.Create(SOCK_STREAM);
+			set_socket_reuseaddr(&listen_sock);
 			listen_sock.Bind(bindy->port_,NULL);
 			listen_sock.Listen();
 
 			// send a broadcast itself
 			Socket bcast_sock;
 			bcast_sock.Create(SOCK_DGRAM);
+			set_socket_broadcast(&bcast_sock);
 			std::string addr("255.255.255.255"); // todo check: does this properly route on lin & win?
 			if (!bcast_sock.Connect(addr.c_str(), bindy->port_)) {
 				throw std::runtime_error("Error establishing connection.");
 			}
 			bcast_sock.Send(bc_packet, sizeof(bc_packet), 0);
+			bcast_sock.CloseSocket();
 
 			// wait for reply
 			timeval t;
@@ -742,7 +763,7 @@ void socket_thread_function(void* arg) {
 }
 
 
-bool set_socket_options (Socket *s) {
+bool set_socket_keepalive_nodelay (Socket *s) {
 bool ok = true;
 
 #if defined (WIN32) || defined(WIN64)
@@ -797,12 +818,13 @@ void main_thread_function(void *arg) {
 	try {
 		DEBUG("Creating TCP listen socket...");
 		listen_sock.Create(SOCK_STREAM);
+		set_socket_reuseaddr(&listen_sock);
 		listen_sock.Bind(bindy->port(), NULL);
 	} catch (std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 		throw e;
 	}
-	if (!set_socket_options(&listen_sock))  { // all connection sockets inherit required options from listening socket
+	if (!set_socket_keepalive_nodelay(&listen_sock))  { // all connection sockets inherit required options from listening socket
 		std::cerr << "Could not set socket options." << std::endl;
 		throw std::runtime_error("setsockopt failed");
 	}
@@ -846,6 +868,7 @@ void broadcast_thread_function(void *arg) {
 	try {
 		DEBUG( "Creating UDP listen socket..." );
 		bcast_sock.Create(SOCK_DGRAM);
+		set_socket_broadcast(&bcast_sock);
 		bcast_sock.Bind(bindy->port(), NULL);
 	} catch (std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;

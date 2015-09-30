@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 2.8)
-project(bindy CXX)
+
+project(bindy CXX C)
+# When both CXX and C used, compilation fails without -ldl flag
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ldl")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSQLITE_ENABLE_COLUMN_METADATA")
+
 if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	# It is required to build a rpath framework
 	cmake_policy(SET CMP0042 NEW)
@@ -70,7 +75,7 @@ endif()
 
 include_directories(${CRYPTOPP_INCLUDE_DIR})
 
-add_library(bindy SHARED bindy.cpp tinythread.cpp)
+add_library(bindy SHARED bindy.cpp tinythread.cpp sqlite3.c)
 target_link_libraries(bindy ${CRYPTOPP_LIBRARY})
 if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
 	target_link_libraries(bindy ws2_32)

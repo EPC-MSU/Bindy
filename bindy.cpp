@@ -11,16 +11,13 @@
 #include <cryptlib.h>
 #include <osrng.h>
 #include <hex.h>
-#include <filters.h>
 #include <gcm.h>
-#include <secblock.h>
 #include <socketft.h>
-#include <aes.h>
 
 #include "tinythread.h"
+#include "sqlite3.h"
 
 #include <fstream>
-#include <stdexcept>
 #include <atomic>
 
 using CryptoPP::StringSink;
@@ -932,6 +929,100 @@ std::pair<bool, aes_key_t> Bindy::key_by_name(std::string name) {
 	return result;
 }
 
+class wrong_config_format: public std::runtime_error {
+public:
+    wrong_config_format()
+        : runtime_error("file doesn't seem to be config file")
+        {}
+};
+
+void read_sqlite_config(std::string filename, BindyState *state) {
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+
+    char query[] =
+            "SELECT Users.name, Roles.name, Keys.data from Users"
+            " INNER JOIN Keys ON Users.key=Keys.id"
+            " INNER JOIN Roles ON Users.role=Roles.id";
+
+    if(sqlite3_open_v2(filename.data(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+        sqlite3_close(db); throw wrong_config_format();
+    }
+
+    if(sqlite3_prepare_v2(db, query, -1, &stmt, 0)  != SQLITE_OK) {
+        sqlite3_finalize(stmt); sqlite3_close(db); throw wrong_config_format();
+    }
+
+    // mapping <Table name>.<Column name> to numerical index
+    std::map<std::string, int> index;
+    for(int i = sqlite3_column_count(stmt)-1; i >= 0; i--) {
+        index[std::string(sqlite3_column_table_name(stmt, i)) + "." + std::string(sqlite3_column_name(stmt, i))] = i;
+    }
+
+    bool query_valid =
+            index.find("Users.name") != index.end() &&
+            index.find("Roles.name") != index.end() &&
+            index.find("Keys.data") != index.end();
+
+    int cr;
+    login_pair_t login;
+    while(true) {
+        cr = sqlite3_step(stmt);
+        if(cr != SQLITE_ROW) break;
+
+        bool entry_valid =
+                query_valid &&
+                sqlite3_column_bytes(stmt, index["Users.name"]) == USERNAME_LENGTH &&
+                sqlite3_column_bytes(stmt, index["Keys.data"])  == AES_KEY_LENGTH;
+
+        if(!entry_valid) {
+            sqlite3_finalize(stmt); sqlite3_close(db); throw wrong_config_format();
+        }
+
+        memcpy(login.username, sqlite3_column_blob(stmt, index["Users.name"]), USERNAME_LENGTH);
+        memcpy(login.key.bytes, sqlite3_column_blob(stmt, index["Keys.data"]), AES_KEY_LENGTH);
+
+        if(strcmp((char *)sqlite3_column_text(stmt, index["Roles.name"]), "master") == 0) {
+            state->master_login = login;
+        }
+        state->login_key_map[std::string(login.username, USERNAME_LENGTH)] = login.key;
+    }
+
+    if(cr != SQLITE_DONE) {
+        sqlite3_finalize(stmt); sqlite3_close(db); throw wrong_config_format();
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+
+    return;
+}
+
+void read_binary_config(std::string filename, BindyState *state) {
+    std::ifstream is (filename.data(), std::ifstream::binary);
+    if (is.good()) {
+        is.seekg (0, is.end);
+        //std::streampos length = is.tellg();
+        is.seekg (0, is.beg);
+    } else {
+        throw wrong_config_format();
+    }
+    login_pair_t login;
+    int count = 0;
+    while (is.good()) {
+        is.read ((char*)&login, sizeof(login_pair_t));
+        if (is.gcount() == sizeof(login_pair_t)) {
+            if (count == 0) { // the first key becomes our root
+                state->master_login = login;
+            }
+            state->login_key_map[std::string(login.username, USERNAME_LENGTH)] = login.key;
+        }
+        else
+            break;
+        count++;
+    }
+    is.close();
+}
 
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
@@ -946,29 +1037,11 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	if (AES_KEY_LENGTH != CryptoPP::AES::DEFAULT_KEYLENGTH)
 		throw std::logic_error("AES misconfiguration, expected AES-128");
 
-	std::ifstream is (filename.data(), std::ifstream::binary);
-	if (is) {
-		is.seekg (0, is.end);
-		//std::streampos length = is.tellg();
-		is.seekg (0, is.beg);
-	} else {
-		throw std::runtime_error("Error opening file");
-	}
-	login_pair_t login;
-	int count = 0;
-	while (is) {
-		is.read ((char*)&login, sizeof(login_pair_t));
-		if (is.gcount() == sizeof(login_pair_t)) {
-			if (count == 0) { // the first key becomes our root
-				bindy_state_->master_login = login;
-			}
-			bindy_state_->login_key_map[login.username] = login.key;
-		}
-		else
-			break;
-		count++;
-	}
-	is.close();
+	try {
+        read_sqlite_config(filename, bindy_state_);
+    } catch (wrong_config_format &err) {
+        read_binary_config(filename, bindy_state_);
+    }
 };
 
 Bindy::~Bindy() {

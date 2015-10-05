@@ -210,7 +210,7 @@ private:
 
 bool set_socket_broadcast (Socket *s) {
 	bool ok = true;
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	int optval = 1;
 	ok = ( 0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)) );
 #endif
@@ -219,7 +219,7 @@ bool set_socket_broadcast (Socket *s) {
 
 bool set_socket_reuseaddr (Socket *s) {
 	bool ok = true;
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	int optval = 1;
 	ok = ( 0 == setsockopt(*s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) );
 #endif

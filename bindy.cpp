@@ -91,10 +91,12 @@ std::string hex_encode(const char* s, size_t size) {
 	return encoded;
 }
 
+/*! This function takes an std::string and returns its representation in hex as a string. */
 std::string hex_encode(std::string s) {
 	return hex_encode(s.c_str(), s.size());
 }
 
+/*! This function takes a string as an std::vector of bytes and returns its representation in hex as a string. */
 std::string hex_encode(std::vector<uint8_t> v) {
 	return hex_encode((const char*)&v[0], v.size());
 }
@@ -107,10 +109,12 @@ void string_set(std::string *str, char* buf, int size) {
 	}
 }
 
+/*! Helper function for CryptoPP encode/decode functions. Copies characters represented as uint8_t into the string. */
 void string_set(std::string *str, uint8_t* buf, int size) {
 	string_set(str, reinterpret_cast<char*>(buf), size);
 }
 
+/*! Internal state of Bindy class. Holds everything outside of public interface. */
 class BindyState
 {
 public:
@@ -134,6 +138,7 @@ private:
 	BindyState& operator=(const BindyState&) = delete;
 };
 
+/*! Helper class. Any class which inherits Countable gets the ability to query number of its instances. */
 class Countable
 {
 public:
@@ -207,7 +212,7 @@ private:
 	uint8_t * p_body;
 };
 
-
+/*! Helper function. Enables broadcast on a socket on Linux and Mac systems. */
 bool set_socket_broadcast (Socket *s) {
 	bool ok = true;
 #if defined(__linux__) || defined(__APPLE__)
@@ -217,6 +222,7 @@ bool set_socket_broadcast (Socket *s) {
 	return ok;
 }
 
+/*! Helper function. Enables address reuse on a socket on Linux and Mac systems. */
 bool set_socket_reuseaddr (Socket *s) {
 	bool ok = true;
 #if defined(__linux__) || defined(__APPLE__)
@@ -298,7 +304,10 @@ private:
 	friend void socket_thread_function(void* arg);
 };
 
+/*! Forward declaration of socket thread function. */
 void socket_thread_function(void* arg);
+
+/*! A class which helps manage resources of a socket and its thread. */
 class SuperConnection : public Connection {
 public:
 	SuperConnection(Bindy* bindy, Socket* _socket, conn_id_t conn_id, bool inits, bcast_data_t bcast_data);
@@ -316,6 +325,7 @@ SuperConnection::SuperConnection(Bindy * _bindy, Socket *_socket, conn_id_t conn
 SuperConnection::~SuperConnection() {
 }
 
+/*! Class which represents a single Bindy connection to a remote host. Identified by connection id. */
 Connection::Connection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect) : Countable(conn_id) {
 	if (count() == 1) {
 		this->inits_connect = _inits_connect;
@@ -382,6 +392,7 @@ Connection::~Connection() {
 	}
 }
 
+/*! A class which represents a single message to be sent over a connection. */
 Message::Message(size_t data_length, link_pkt packet_type, const char* ptr) {
 	assert(data_length + sizeof(header_t) <= UINT_MAX);
 	this->header.data_length = static_cast<uint32_t>(data_length);
@@ -409,6 +420,7 @@ Message::~Message() {
 	delete[] p_body;
 }
 
+/*! Function which returns message header as an std::string. */
 std::string Message::header_string() {
 	std::string ret;
 	ret.resize( sizeof(header_t) );
@@ -416,6 +428,7 @@ std::string Message::header_string() {
 	return ret;
 }
 
+/*! Function which returns message data as an std::string. */
 std::string Message::data_string() {
 	std::string ret;
 	ret.resize( header.data_length );
@@ -423,12 +436,14 @@ std::string Message::data_string() {
 	return ret;
 }
 
+/*! Function which returns message data as an std::vector of uint8_t types. */
 std::vector<uint8_t> Message::data_vector() {
 	std::vector<uint8_t> v(header.data_length);
 	memcpy(&v.at(0), p_body, v.size());
 	return v;
 }
 
+/*! Function which returns type of a message. */
 link_pkt Message::packet_type() {
 	return header.packet_type;
 }
@@ -738,6 +753,7 @@ void Connection::disconnect_self() {
 	bindy->disconnect(conn_id);
 }
 
+/*! Function which is executed in a separate thread. Receives and processes data from a socket. */
 void socket_thread_function(void* arg) {
 	Connection* conn = nullptr;
 	try {
@@ -811,6 +827,7 @@ bool ok = true;
 	return ok;
 }
 
+/*! Function which listens for incoming TCP connections. */
 void main_thread_function(void *arg) {
 	Bindy* bindy = (Bindy*)arg;
 
@@ -861,6 +878,7 @@ void main_thread_function(void *arg) {
 	listen_sock.CloseSocket();
 }
 
+/*! Function which listens for UDP broadcast connection attempts. */
 void broadcast_thread_function(void *arg) {
 	Bindy* bindy = (Bindy*)arg;
 

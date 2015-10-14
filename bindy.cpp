@@ -972,14 +972,15 @@ void read_sqlite_config(std::string filename, BindyState *state) {
 
         bool entry_valid =
                 query_valid &&
-                sqlite3_column_bytes(stmt, index["Users.name"]) == USERNAME_LENGTH &&
+                sqlite3_column_bytes(stmt, index["Users.name"]) <= USERNAME_LENGTH &&
                 sqlite3_column_bytes(stmt, index["Keys.data"])  == AES_KEY_LENGTH;
 
         if(!entry_valid) {
             sqlite3_finalize(stmt); sqlite3_close(db); throw wrong_config_format();
         }
 
-        memcpy(login.username, sqlite3_column_blob(stmt, index["Users.name"]), USERNAME_LENGTH);
+		memset(login.username, 0, 32);
+        memcpy(login.username, sqlite3_column_blob(stmt, index["Users.name"]), sqlite3_column_bytes(stmt, index["Users.name"]));
         memcpy(login.key.bytes, sqlite3_column_blob(stmt, index["Keys.data"]), AES_KEY_LENGTH);
 
         if(strcmp((char *)sqlite3_column_text(stmt, index["Roles.name"]), "master") == 0) {

@@ -6,6 +6,7 @@
 #include <list>
 #include <string>
 #include <iostream>
+#include <future>
 
 #if defined (WIN32) || defined(WIN64)
 #include <winsock2.h>
@@ -21,18 +22,20 @@
 
 // MSVC symbols export
 #if defined (WIN32) || defined(WIN64)
-  #if defined(bindy_EXPORTS)
+#if defined(bindy_EXPORTS)
     #define BINDY_EXPORT __declspec(dllexport)
   #else
     #define BINDY_EXPORT __declspec(dllimport)
   #endif
 #else
- #define BINDY_EXPORT
+#define BINDY_EXPORT
 #endif
 
 
 namespace bindy
 {
+// TODO: big-endian vs little-endian problem?
+// TODO: possible alignment problems?
 // aes-128
 const size_t AES_KEY_LENGTH = 16;
 typedef struct {
@@ -50,6 +53,13 @@ enum class link_pkt : uint8_t{
 	PacketInitRequest = 1,
 	PacketInitReply = 2,
 	PacketLinkInfo = 3,
+	// Administration related packet types
+	PacketAddUser = 4,
+	PacketAddUserAck = 5,
+	PacketDelUser = 6,
+	PacketDelUserAck = 7,
+	PacketChangeKey = 8,
+	PacketChangeKeyAck = 9,
 	PacketTermRequest = 254,
 	PacketTermReply = 255
 };
@@ -63,7 +73,7 @@ typedef struct {
 
 	/*! Packet type. */
 	link_pkt packet_type;
-	
+
 	/*! Reserved for future use. */
 	uint8_t  reserved1;
 
@@ -114,6 +124,18 @@ public:
 	*	Sets the callback function which will receive unstructured data from the peers.
 	*	@param[in] datasink Pointer to the callback function which will process the data.
 	*/
+	void add_user_local(const std::string &username, const aes_key_t &key);
+	void del_user_local(const std::string &username);
+	void change_key_local(const std::string &username, const aes_key_t &key);
+
+	std::future<void> add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
+	std::future<void> del_user_remote(const conn_id_t conn_id, const std::string &username);
+	std::future<void> change_key_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
+
+	/*!
+	*	Sets the callback function which will receive unstructured data from the peers.
+	*	@param[in] datasink Pointer to the callback function which will process the data.
+	*/
 	void set_handler(void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data));
 
 	/*!
@@ -133,7 +155,7 @@ public:
 	*	\return The handle to the created connection. Equals "conn_id_invalid" in case connection could not be established.
 	*/
 	conn_id_t connect (std::string addr);
-	
+
 	/*!
 	*	Disconnects the channel identified by connection id.
 	*	Call to this function does not affect other connections to the same host.

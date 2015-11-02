@@ -29,17 +29,24 @@ int main (int argc, char *argv[])
 		} catch (...) {
 			fail("Error establishing connection to remote address.");
 		}
-//		try {
+		try {
+			auto result = bindy->list_users_local();
+
 			std::string text = std::string(argv[3]);
 			std::vector<uint8_t> data = std::vector<uint8_t>(text.begin(), text.end());
 //			bindy->send_data(conn_id, data);
-			bindy->add_user_remote(conn_id, {"qqqqaaaabbbbccccqqqqaaaabbbbcccc", }, bindy::aes_key_t{"qqqqqqqqqqqqqq\0"}).wait();
-			bindy->change_key_remote(conn_id, {"qqqqaaaabbbbccccqqqqaaaabbbbcccc", }, bindy::aes_key_t{"xxxxxxxxxxxxxx\0"}).wait();
-			bindy->del_user_remote(conn_id, {"qqqqaaaabbbbccccqqqqaaaabbbbcccc", }).wait();
+			auto uuid_future = bindy->add_user_remote(conn_id, {"qqqqaaaabbbbccccqqqqaaaabbbbcccc", }, bindy::aes_key_t{"5aqq4qqqqqqqqq\0"});
+			uuid_future.wait();
+			auto uuid = uuid_future.get();
+			std::cout << uuid;
+			bindy->set_master_remote(conn_id, uuid).wait();
+
+//			bindy->change_key_remote(conn_id, uuid, bindy::aes_key_t{"xxxxxxxxxxxxxx\0"}).wait();
+//			bindy->del_user_remote(conn_id, uuid	).wait();
 			bindy::sleep_ms(1000); // let the server process the data
-//		} catch (...) {
-//			fail("Error sending data.");
-//		}
+		} catch (...) {
+			fail("Error sending data.");
+		}
 	} else if (argc == 2) { // I am a Server
 		try {
 			bindy.reset(new bindy::Bindy(argv[1], true, true));

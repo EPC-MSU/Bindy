@@ -15,10 +15,13 @@
 #include <socketft.h>
 
 #include "tinythread.h"
-#include "sqlite3.h"
+#include "sqlite/sqlite3.h"
+#include "sole/sole.hpp"
 
 #include <fstream>
 #include <atomic>
+#include <sstream>
+
 
 using CryptoPP::StringSink;
 using CryptoPP::StringSource;
@@ -70,13 +73,16 @@ void sleep_ms(size_t ms)
 }
 
 /*! Acknowledgement identifier */
-typedef uint32_t ack_id_t;
+typedef sole::uuid ack_id_t;
 
 /*! Acknowldegement callback */
 typedef std::function<void(const std::vector<uint8_t>&)> ack_callback_t;
 
-/*! A helper type which contains a single message(header+content) to be encrypted and sent over the TCP socket. */
-//typedef std::pair<header_t, std::vector<uint8_t>> Message;
+/*! A helper type which contains a single message(type+content) to be encrypted and sent over the TCP socket. */
+struct Message {
+	link_pkt type;
+	std::vector<uint8_t> content;
+};
 
 /*! Lock guard short type definition. */
 typedef tthread::lock_guard<tthread::mutex> tlock;
@@ -124,14 +130,14 @@ public:
 	void (* m_datasink)(conn_id_t conn_id, std::vector<uint8_t> data);
 	void (* m_discnotify)(conn_id_t conn_id);
 
-	std::map<std::string, aes_key_t> login_key_map;
+//	std::map<std::string, aes_key_t> login_key_map;
 	tthread::thread * main_thread;
 	tthread::thread * bcast_thread;
 	std::map<conn_id_t, SuperConnection*> connections;
 	tthread::mutex mutex; // global mutex
 	tthread::mutex interlock_mutex; // mutex to sync betweern listening TCP and UDP threads
 	std::string nodename; // name of this node
-	login_pair_t master_login; // root key
+//	user_t master; // root key
 	sqlite3 *sql_conn;
 
 	BindyState() { }
@@ -213,22 +219,6 @@ bool set_socket_reuseaddr (Socket *s) {
 }
 
 /*!
-* Class used as simple random message id generator.
-*/
-// FIXME: the same sequence is generated every pprogram run
-template< class IntType = int >
-class AckIdGen {
-public:
-	IntType operator()() {
-		return distribution(generator);
-	}
-
-private:
-	std::default_random_engine generator;
-	std::uniform_int_distribution<IntType> distribution;
-};
-
-/*!
 * Class which contains information about a single connection.
 */
 class Connection : public Countable {
@@ -254,7 +244,7 @@ public:
 	/*!
 	* Decrypts and returns a single packet read from the socket of this connection.
 	*/
-	std::pair<link_pkt, std::vector<uint8_t>> recv_packet();
+	Message recv_packet();
 
 	/*!
 	* Returns buffer size of this connection.
@@ -298,7 +288,6 @@ private:
 	conn_id_t conn_id;
 	bool inits_connect;
 	std::map<ack_id_t, ack_callback_t> * ack_callbacks;
-	AckIdGen<ack_id_t> * ack_id_gen;
 	void disconnect_self();
 
 	in_addr get_ip();
@@ -340,7 +329,6 @@ Connection::Connection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool 
 		this->ack_mutex = new tthread::mutex();
 		this->buffer = new std::deque<uint8_t>();
 		this->ack_callbacks = new std::map<ack_id_t, ack_callback_t>();
-		this->ack_id_gen = new AckIdGen<ack_id_t>();
 	}
 }
 
@@ -359,7 +347,6 @@ Connection::Connection(Connection* other) : Countable(other->conn_id) {
 		this->ack_mutex = other->ack_mutex;
 		this->buffer = other->buffer;
 		this->ack_callbacks = other->ack_callbacks;
-		this->ack_id_gen = other->ack_id_gen;
 	}
 }
 
@@ -399,7 +386,7 @@ Connection::~Connection() {
 }
 
 void Connection::send_packet_ack(link_pkt type, std::vector<uint8_t>& content, ack_callback_t& cb) {
-	ack_id_t request_id = (*ack_id_gen)();
+	ack_id_t request_id = sole::uuid1();
 
 	unsigned long orig_size = content.size();
 	content.resize(content.size()+sizeof(ack_id_t));
@@ -457,7 +444,7 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 }
 
 // Receives message from connection. Modifies connection IV in preparation for the next packet.
-std::pair<link_pkt, std::vector<uint8_t >> Connection::recv_packet() {
+Message Connection::recv_packet() {
 	tlock lock(*recv_mutex);
 	int get, rcv;
 	CryptoPP::GCM< AES >::Decryption d;
@@ -533,7 +520,7 @@ std::pair<link_pkt, std::vector<uint8_t >> Connection::recv_packet() {
 
 	assert(header.data_length == recovered_body.size());
 //	Message message(header, recovered_body.c_str());
-	return std::make_pair(header.packet_type, std::move(recovered_body));
+	return {header.packet_type, std::move(recovered_body)};
 }
 
 unsigned int Connection::buffer_size()
@@ -571,19 +558,19 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 
 	if (!inits_connect) { // this party accepts the connection
 		// Initial exchange
-		uint8_t username[USERNAME_LENGTH + 1];
-		memset(username, 0, sizeof(username));
+		uint8_t auth_data[AUTH_DATA_LENGTH];
+		memset(auth_data, 0, AUTH_DATA_LENGTH);
 		if (use_bcast) {
-			memcpy(username, reinterpret_cast<const void*>(&bcast_data.data.at(0)), USERNAME_LENGTH);
+			memcpy(auth_data, reinterpret_cast<const void*>(&bcast_data.data.at(0)), AUTH_DATA_LENGTH);
 		}
 		else {
-			sock->Receive(username, USERNAME_LENGTH, 0);
+			sock->Receive(auth_data, AUTH_DATA_LENGTH, 0);
 		}
-		username[USERNAME_LENGTH] = '\0';
 
 		// Authorization happens here
-		std::string name((const char*)username);
-		std::pair<bool, aes_key_t> pair = bindy->key_by_name(name);
+		sole::uuid uuid;
+		memcpy(&uuid, auth_data, sizeof(sole::uuid));
+		std::pair<bool, aes_key_t> pair = bindy->key_by_uuid(uuid);
 		if (pair.first == false) {
 			throw std::runtime_error("key not found");
 		}
@@ -593,7 +580,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 		recv_key->Assign(key.bytes, AES_KEY_LENGTH);
 
 		if (use_bcast) {
-			memcpy(recv_iv->BytePtr(), reinterpret_cast<const void*>(&bcast_data.data.at(USERNAME_LENGTH)), AES_KEY_LENGTH);
+			memcpy(recv_iv->BytePtr(), reinterpret_cast<const void*>(&bcast_data.data.at(AUTH_DATA_LENGTH)), AES_KEY_LENGTH);
 		}
 		else {
 			sock->Receive(recv_iv->BytePtr(), AES_KEY_LENGTH, 0);
@@ -629,8 +616,8 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 		recv_iv->Assign(*send_iv);
 
 		// Authorize ourselves here
-		std::string name = bindy->get_master_login_username();
-		std::pair<bool, aes_key_t> pair = bindy->key_by_name(name);
+		sole::uuid uuid = bindy->get_master_uuid();
+		std::pair<bool, aes_key_t> pair = bindy->key_by_uuid(uuid);
 		if (pair.first == false)
 			throw std::runtime_error("key not found");
 		aes_key_t key = pair.second;
@@ -639,13 +626,14 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 		recv_key->Assign(key.bytes, AES_KEY_LENGTH);
 
 
-		uint8_t username[USERNAME_LENGTH];
-		std::string mname = bindy->get_master_login_username();
-		memcpy(username, mname.c_str(), USERNAME_LENGTH);
+		uint8_t auth_data[AUTH_DATA_LENGTH];
+		memset(auth_data, 0, AUTH_DATA_LENGTH);
+//		std::string mname = bindy->get_master_login_username();
+		memcpy(auth_data, &uuid, sizeof(sole::uuid));
 		if (use_bcast) {
-			uint8_t bc_packet[USERNAME_LENGTH + AES_KEY_LENGTH];
-			memcpy(bc_packet, username, USERNAME_LENGTH);
-			memcpy(bc_packet + USERNAME_LENGTH, send_iv->BytePtr(), AES_KEY_LENGTH);
+			uint8_t bc_packet[AUTH_DATA_LENGTH + AES_KEY_LENGTH];
+			memcpy(bc_packet, auth_data, AUTH_DATA_LENGTH);
+			memcpy(bc_packet + AUTH_DATA_LENGTH, send_iv->BytePtr(), AES_KEY_LENGTH);
 			// accept incoming connection(s?) from server(s?) who will hear our broadcast and want to talk back
 			Socket listen_sock;
 			listen_sock.Create(SOCK_STREAM);
@@ -680,7 +668,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 			listen_sock.CloseSocket();
 		}
 		else {
-			sock->Send(username, USERNAME_LENGTH, 0);
+			sock->Send(auth_data, AUTH_DATA_LENGTH, 0);
 			sock->Send((const uint8_t*)(send_iv->BytePtr()), AES_KEY_LENGTH, 0);
 		}
 
@@ -714,111 +702,131 @@ void Connection::disconnect_self() {
 }
 
 
-std::vector<uint8_t> on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>& content) {
+Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>& content) {
+	if (content.size() != AUTH_DATA_LENGTH +AES_KEY_LENGTH)
+		throw std::runtime_error("incorrect message length");
+
 	uint8_t *raw_ptr = content.data();
 
-	std::string username(reinterpret_cast<char *>(raw_ptr), USERNAME_LENGTH);
+	std::string username(reinterpret_cast<char *>(raw_ptr), AUTH_DATA_LENGTH);
 	aes_key_t key;
-	memcpy(key.bytes, raw_ptr + USERNAME_LENGTH, AES_KEY_LENGTH);
+	memcpy(key.bytes, raw_ptr + AUTH_DATA_LENGTH, AES_KEY_LENGTH);
 
-	bindy.add_user_local(username, key);
+	try {
+		sole::uuid new_user_uuid = bindy.add_user_local(username, key);
 
-	return {};
+		std::vector<uint8_t> reply(sizeof(sole::uuid));
+		memcpy(reply.data(), &new_user_uuid, sizeof(sole::uuid));
+
+		return Message{link_pkt::PacketAckSuccess, std::move(reply)};
+	} catch (...) {
+		return Message{link_pkt::PacketAckFailure, {}};
+	}
 }
 
-std::vector<uint8_t> on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>& content) {
+Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>& content) {
+	if(content.size() != sizeof(sole::uuid))
+		throw std::runtime_error("incorrect message length");
+
 	uint8_t *raw_ptr = content.data();
 
-	std::string username(reinterpret_cast<char *>(raw_ptr), USERNAME_LENGTH);
+	sole::uuid uuid;
+	memcpy(&uuid, raw_ptr, sizeof(sole::uuid));
 
-	bindy.del_user_local(username);
+	try {
+		bindy.del_user_local(uuid);
 
-	return {};
+		return Message{link_pkt::PacketAckSuccess, {}};
+	} catch (...) {
+		return Message{link_pkt::PacketAckFailure, {}};
+	}
 }
 
-std::vector<uint8_t> on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>& content) {
+Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>& content) {
+	if(content.size() != sizeof(sole::uuid)+AES_KEY_LENGTH)
+		throw std::runtime_error("incorrect message length");
+
 	uint8_t *raw_ptr = content.data();
 
-	std::string username(reinterpret_cast<char *>(raw_ptr), USERNAME_LENGTH);
+	sole::uuid uuid;
+	memcpy(&uuid, raw_ptr, sizeof(sole::uuid));
 	aes_key_t key;
-	memcpy(key.bytes, raw_ptr + USERNAME_LENGTH, AES_KEY_LENGTH);
+	memcpy(key.bytes, raw_ptr + sizeof(sole::uuid), AES_KEY_LENGTH);
 
-	bindy.change_key_local(username, key);
+	try {
+		bindy.change_key_local(uuid, key);
 
-	return {};
+		return Message{link_pkt::PacketAckSuccess, {}};
+	} catch(...) {
+		return Message{link_pkt::PacketAckFailure, {}};
+	}
+}
+
+Message on_set_master_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>& content) {
+	if(content.size() != sizeof(sole::uuid))
+		throw std::runtime_error("incorrect message length");
+
+	uint8_t *raw_ptr = content.data();
+
+	sole::uuid uuid;
+	memcpy(&uuid, raw_ptr, sizeof(sole::uuid));
+
+	try {
+		bindy.set_master_local(uuid);
+
+		return Message{link_pkt::PacketAckSuccess, {}};
+	} catch (...) {
+		return Message{link_pkt::PacketAckFailure, {}};
+	}
 }
 
 void socket_thread_function(void* arg) {
 	Connection* conn = nullptr;
 	try {
 		conn = new Connection((Connection*)arg);
-		while (true) { // actually: while m.packet_type != PacketLinkTermRequest
-			auto msg = conn->recv_packet();
-			link_pkt type = msg.first;
+		while(true) {
+			Message request(conn->recv_packet());
 
-			if(type == link_pkt::PacketData) {
-				conn->callback_data(msg.second);
+			if(request.type == link_pkt::PacketTermRequest) {
+				// FIXME: cleaner solution for connection termination?
+				throw std::runtime_error("Connection close request received");
+			} else if(request.type == link_pkt::PacketData) {
+				conn->callback_data(request.content);
 			// Internal administration protocol handling
 			} else {
 				// we assume that last bytes are message id
 				ack_id_t msg_id;
-				unsigned long orig_request_size = msg.second.size()-sizeof(ack_id_t);
-				memcpy(&msg_id, msg.second.data()+orig_request_size, sizeof(ack_id_t));
-				msg.second.resize(orig_request_size);
+				unsigned long orig_request_size = request.content.size()-sizeof(ack_id_t);
+				memcpy(&msg_id, request.content.data()+orig_request_size, sizeof(ack_id_t));
+				request.content.resize(orig_request_size);
 
-				if(type == link_pkt::PacketAddUserAck || type == link_pkt::PacketDelUserAck || type == link_pkt::PacketChangeKeyAck) {
+				if(request.type == link_pkt::PacketAckSuccess || request.type == link_pkt::PacketAckFailure) {
 					conn->ack_mutex->lock();
 					// pass reply message body to registered callback
-					conn->ack_callbacks->at(msg_id)(msg.second);
+					conn->ack_callbacks->at(msg_id)(request.content);
 //					conn->ack_callbacks.erase(msg_id);
 					conn->ack_mutex->unlock();
 //					cb(msg.second);
 				} else {
-					link_pkt reply_type;
-					std::vector<uint8_t> reply;
-
-					if(type == link_pkt::PacketAddUser) {
-						reply_type = link_pkt::PacketAddUserAck;
-						reply = on_add_user_remote(conn->conn_id, *conn->bindy, msg.second);
-					} else if(type == link_pkt::PacketDelUser) {
-						reply_type = link_pkt::PacketDelUserAck;
-						reply = on_del_user_remote(conn->conn_id, *conn->bindy, msg.second);
-					} else if(type == link_pkt::PacketChangeKey) {
-						reply_type = link_pkt::PacketChangeKeyAck;
-						reply = on_change_key_remote(conn->conn_id, *conn->bindy, msg.second);
+//					link_pkt reply_type;
+					Message reply;
+					if(request.type == link_pkt::PacketAddUser) {
+						reply = on_add_user_remote(conn->conn_id, *conn->bindy, request.content);
+					} else if(request.type == link_pkt::PacketDelUser) {
+						reply = on_del_user_remote(conn->conn_id, *conn->bindy, request.content);
+					} else if(request.type == link_pkt::PacketChangeKey) {
+						reply = on_change_key_remote(conn->conn_id, *conn->bindy, request.content);
+					} else if(request.type == link_pkt::PacketSetMaster) {
+						reply = on_set_master_remote(conn->conn_id, *conn->bindy, request.content);
 					}
 
-					unsigned long orig_reply_size = reply.size();
-					reply.resize(orig_reply_size + sizeof(ack_id_t));
-					memcpy(reply.data() + orig_reply_size, &msg_id, sizeof(ack_id_t));
-					conn->send_packet(reply_type, reply);
+					unsigned long orig_reply_size = reply.content.size();
+					reply.content.resize(orig_reply_size + sizeof(ack_id_t));
+					memcpy(reply.content.data() + orig_reply_size, &msg_id, sizeof(ack_id_t));
+					conn->send_packet(reply.type, reply.content);
 				}
 			}
-		}
-		//Process packet contents
-//			switch (m.packet_type()) {
-//				case link_pkt::PacketData: {
-//
-//				} break;
-//				case link_pkt::PacketAddUser: {
-////					conn->send_packet(&m);
-////					printf("Victory2!");
-////					conn->bindy->add_user_local();
-////					conn->send_packet();
-//				} break;
-//				case link_pkt::PacketDelUser: {
-////					conn->bindy->del_user_local();
-////					conn->send_packet();
-//				} break;
-//				case link_pkt::PacketChangeKey: {
-////					conn->bindy->change_key_local();
-////					conn->send_packet();
-//				} break;
-//				default: {
-//					DEBUG( "stf: unknown packet received, ignoring" );
-//				}; break; // ignore the unknown
-//			}
-//		}
+		};
 	} catch (...) {
 		DEBUG( "Caught exception, deleting connection..." );
 	}
@@ -942,7 +950,7 @@ void broadcast_thread_function(void *arg) {
 	bool recv_ok = true;
 	try {
 		while (recv_ok) {
-			char setuprq[USERNAME_LENGTH + AES_KEY_LENGTH];
+			char setuprq[AUTH_DATA_LENGTH + AES_KEY_LENGTH];
 			//unsigned int size = bcast_sock.Receive(setuprq, sizeof (setuprq), NULL);
 			// Cannot use Cryptopp wrapper here because it doesn't provide src addr for broadcasts
 			struct sockaddr from;
@@ -984,36 +992,19 @@ void broadcast_thread_function(void *arg) {
 	bcast_sock.CloseSocket();
 }
 
-std::pair<bool, aes_key_t> Bindy::key_by_name(std::string name) {
-	std::pair<bool, aes_key_t> result;
-	if (bindy_state_->login_key_map.count(name) == 1) {
-		result.first = true;
-		result.second = bindy_state_->login_key_map[name];
-	}
-	else {
-		result.first = false;
-	}
-	return result;
-}
-
-class wrong_config_format: public std::runtime_error {
-public:
-	wrong_config_format()
-			: runtime_error("file doesn't seem to be config file")
-	{}
-};
-
-void read_sqlite_config(std::string filename, BindyState *state) {
-	sqlite3 *db = state->sql_conn;
+std::pair<bool, aes_key_t> Bindy::key_by_uuid(const sole::uuid& uuid) {
+	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
-	char query[] =
-			"SELECT Users.name, Roles.name, Users.key from Users"
-					" INNER JOIN Roles ON Users.role=Roles.id";
+	std::string query(
+			"SELECT key FROM Users WHERE uuid = ?"
+	);
 
-	if(sqlite3_prepare_v2(db, query, -1, &stmt, 0)  != SQLITE_OK) {
-		sqlite3_finalize(stmt); throw wrong_config_format();
+	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
+		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 	}
+
+	sqlite3_bind_blob(stmt, 1, &uuid, sizeof(sole::uuid), SQLITE_TRANSIENT);
 
 	// mapping <Table name>.<Column name> to numerical index
 	std::map<std::string, int> index;
@@ -1021,74 +1012,183 @@ void read_sqlite_config(std::string filename, BindyState *state) {
 		index[std::string(sqlite3_column_table_name(stmt, i)) + "." + std::string(sqlite3_column_name(stmt, i))] = i;
 	}
 
-	bool query_valid =
-			index.find("Users.name") != index.end() &&
-			index.find("Roles.name") != index.end() &&
-			index.find("Users.key") != index.end();
+	int cr = sqlite3_step(stmt);
 
-	int cr;
-	login_pair_t login;
-	while(true) {
-		cr = sqlite3_step(stmt);
-		if(cr != SQLITE_ROW) break;
-
-		int raw_name_len = sqlite3_column_bytes(stmt, index["Users.name"]);
-
-		bool entry_valid =
-				query_valid &&
-				raw_name_len <= USERNAME_LENGTH &&
-				sqlite3_column_bytes(stmt, index["Users.key"])  == AES_KEY_LENGTH;
-
-		if(!entry_valid) {
-			sqlite3_finalize(stmt); throw wrong_config_format();
-		}
-
-		memset(login.username, 0, 32);
-		memcpy(login.username, sqlite3_column_blob(stmt, index["Users.name"]), raw_name_len);
-		memcpy(login.key.bytes, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
-
-		if(strcmp((char *)sqlite3_column_text(stmt, index["Roles.name"]), "master") == 0) {
-			state->master_login = login;
-		}
-		state->login_key_map[std::string(login.username, raw_name_len)] = login.key;
+	std::pair<bool, aes_key_t> result;
+	result.first = false;
+	if(cr == SQLITE_ROW) {
+		result.first = true;
+		memset(result.second.bytes, 0, AES_KEY_LENGTH);
+		memcpy(result.second.bytes, sqlite3_column_blob(stmt, index["Users.key"]), sizeof(sole::uuid));
 	}
-
-	if(cr != SQLITE_DONE) {
-		sqlite3_finalize(stmt); throw wrong_config_format();
-	}
+	// ensure that there is only one user with such uuid;
+	// if cr != SQLITE_DONE then database is probably corrupted
+	cr = sqlite3_step(stmt);
 
 	sqlite3_finalize(stmt);
 
-	return;
+	if(cr != SQLITE_DONE || !result.first) {
+		throw std::runtime_error(sqlite3_errmsg(db));
+	}
+
+	return result;
 }
 
-void read_binary_config(std::string filename, BindyState *state) {
-	std::ifstream is (filename.data(), std::ifstream::binary);
-	if (is.good()) {
-		is.seekg (0, is.end);
-		//std::streampos length = is.tellg();
-		is.seekg (0, is.beg);
-	} else {
-		throw wrong_config_format();
+//class wrong_config_format: public std::runtime_error {
+//public:
+//	wrong_config_format()
+//			: runtime_error("file doesn't seem to be config file")
+//	{}
+//};
+
+//void read_sqlite_config(std::string filename, BindyState *state) {
+//	sqlite3 *db = state->sql_conn;
+//	sqlite3_stmt *stmt;
+//
+//	char query[] =
+//			"SELECT Users.name, Roles.name, Users.key from Users"
+//					" INNER JOIN Roles ON Users.role=Roles.id";
+//
+//	if(sqlite3_prepare_v2(db, query, -1, &stmt, 0)  != SQLITE_OK) {
+//		sqlite3_finalize(stmt); throw wrong_config_format();
+//	}
+//
+//	// mapping <Table name>.<Column name> to numerical index
+//	std::map<std::string, int> index;
+//	for(int i = sqlite3_column_count(stmt)-1; i >= 0; i--) {
+//		index[std::string(sqlite3_column_table_name(stmt, i)) + "." + std::string(sqlite3_column_name(stmt, i))] = i;
+//	}
+//
+//	bool query_valid =
+//			index.find("Users.name") != index.end() &&
+//			index.find("Roles.name") != index.end() &&
+//			index.find("Users.key") != index.end();
+//
+//	int cr;
+//	while(true) {
+//		cr = sqlite3_step(stmt);
+//		if(cr != SQLITE_ROW) break;
+//
+//		int raw_name_len = sqlite3_column_bytes(stmt, index["Users.name"]);
+//
+//		bool entry_valid =
+//				query_valid &&
+//				raw_name_len <= AUTH_DATA_LENGTH &&
+//				sqlite3_column_bytes(stmt, index["Users.key"])  == AES_KEY_LENGTH;
+//
+//		if(!entry_valid) {
+//			sqlite3_finalize(stmt); throw wrong_config_format();
+//		}
+//
+//		user_t user;
+//		// copy uuid
+//		const void *uuid_ptr = sqlite3_column_blob(stmt, index["Users.uuid"]);
+//		memcpy(&user.uuid.ab, uuid_ptr, sizeof(user.uuid.ab));
+//		memcpy(&user.uuid.cd, uuid_ptr + sizeof(user.uuid.ab), sizeof(user.uuid.cd));
+//
+//		// copy username
+//		user.name.assign(sqlite3_column_text(stmt, index["Users.name"]));
+//
+//		// copy aes key
+//		memcpy(user.key.bytes, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
+//
+//		if(strcmp((char *)sqlite3_column_text(stmt, index["Roles.name"]), "master") == 0) {
+//			state->master = user;
+//		}
+//		state->login_key_map[std::string(login.username, raw_name_len)] = login.key;
+//	}
+//
+//	if(cr != SQLITE_DONE) {
+//		sqlite3_finalize(stmt); throw wrong_config_format();
+//	}
+//
+//	sqlite3_finalize(stmt);
+//
+//	return;
+//}
+//
+//void read_binary_config(std::string filename, BindyState *state) {
+//	std::ifstream is (filename.data(), std::ifstream::binary);
+//	if (is.good()) {
+//		is.seekg (0, is.end);
+//		//std::streampos length = is.tellg();
+//		is.seekg (0, is.beg);
+//	} else {
+//		throw wrong_config_format();
+//	}
+//	login_pair_t login;
+//	int count = 0;
+//	while (is.good()) {
+//		is.read ((char*)&login, sizeof(login_pair_t));
+//		if (is.gcount() == sizeof(login_pair_t)) {
+//			if (count == 0) { // the first key becomes our root
+//				state->master_login = login;
+//			}
+//			// FIXME: first \0 terminal is interpreted as end of string
+//			state->login_key_map[std::string(login.username)] = login.key;
+//		}
+//		else
+//			break;
+//		count++;
+//	}
+//	is.close();
+//}
+
+void init_db(sqlite3 *db, user_vector_t& users) {
+	sqlite3_stmt *stmt;
+	std::stringstream query_stream;
+
+	std::vector<std::string> static_statements{
+		"CREATE TABLE Roles (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT UNIQUE NOT NULL);",
+		"CREATE TABLE Users (uuid TEXT UNIQUE NOT NULL PRIMARY KEY, name TEXT NOT NULL, role INTEGER REFERENCES Roles (id) NOT NULL, key BLOB (16) NOT NULL UNIQUE);",
+		"CREATE TRIGGER SingleMasterInsert BEFORE INSERT ON Users FOR EACH ROW WHEN NEW.role = 1 BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;",
+		"CREATE TRIGGER SingleMasterUpdate BEFORE UPDATE OF role ON Users FOR EACH ROW WHEN NEW.role = 1  BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;",
+		"BEGIN;",
+		"INSERT INTO Roles VALUES (1, 'master'), (2, 'user');"
+	};
+
+	for(std::string &s : static_statements) {
+		query_stream << s;
 	}
-	login_pair_t login;
-	int count = 0;
-	while (is.good()) {
-		is.read ((char*)&login, sizeof(login_pair_t));
-		if (is.gcount() == sizeof(login_pair_t)) {
-			if (count == 0) { // the first key becomes our root
-				state->master_login = login;
-			}
-			// FIXME: first \0 terminal is interpreted as end of string
-			state->login_key_map[std::string(login.username)] = login.key;
+
+	query_stream << "INSERT INTO Users VALUES ";
+	for (user_t &user : users) {
+		query_stream << "(?, ?, (SELECT id FROM Roles WHERE name='" << "user" << "'), ?)";
+	}
+	query_stream << ";";
+
+	query_stream << "COMMIT;";
+
+	// FIXME: performs full copy
+	auto query = query_stream.str();
+	const char* left = query.data();
+	uint statement = 0;
+	uint user_index = 0;
+	uint bind_index = 1;
+	do {
+		if(sqlite3_prepare_v2(db, left, -1, &stmt, &left) != SQLITE_OK) {
+			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 		}
-		else
-			break;
-		count++;
-	}
-	is.close();
-}
 
+		if(statement >= static_statements.size() && statement < static_statements.size() + users.size()) {
+			auto user = users.at(user_index++);
+			sqlite3_bind_blob(stmt, bind_index++, &user.uuid, sizeof(sole::uuid), SQLITE_TRANSIENT);
+			sqlite3_bind_text(stmt, bind_index++, user.name.data(), AUTH_DATA_LENGTH, SQLITE_TRANSIENT);
+			sqlite3_bind_blob(stmt, bind_index++, user.key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
+		}
+
+		int cr = sqlite3_step(stmt);
+		if(cr != SQLITE_DONE) {
+			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
+		}
+
+		statement++;
+	} while(left[0]!='\0');
+
+	sqlite3_finalize(stmt);
+
+//	DEBUG("Master user changed(uuid: " << uuid << ")");
+}
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		: port_(49150), is_server_(is_server), is_buffered_(is_buffered)
@@ -1107,11 +1207,19 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		sqlite3_close(bindy_state_->sql_conn); throw std::runtime_error("cannot open sqlite");
 	}
 
-	try {
-		read_sqlite_config(filename, bindy_state_);
-	} catch (wrong_config_format &err) {
-		read_binary_config(filename, bindy_state_);
-	}
+//	sqlite3 *test_sql_conn;
+//	if (sqlite3_open_v2("/home/vlad/RIP/Bindy/test.sqlite", &(test_sql_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
+//		sqlite3_close(bindy_state_->sql_conn); throw std::runtime_error("cannot open sqlite");
+//	}
+//	user_vector_t test_users{user_t{sole::uuid4(), "omgwtfuser", bindy::aes_key_t{"5aqq4qqqqqqqqq\0"}}};
+//	init_db(test_sql_conn, test_users);
+	import_user("/home/vlad/RIP/Bindy/test.sqlite");
+
+//	try {
+//		read_sqlite_config(filename, bindy_state_);
+//	} catch (wrong_config_format &err) {
+//		read_binary_config(filename, bindy_state_);
+//	}
 };
 
 Bindy::~Bindy() {
@@ -1121,26 +1229,31 @@ Bindy::~Bindy() {
 		if (bindy_state_->bcast_thread != nullptr)
 			bindy_state_->bcast_thread->join();
 	}
+
+	sqlite3_close(bindy_state_->sql_conn);
+
 	delete bindy_state_->main_thread;
 	delete bindy_state_->bcast_thread;
 	delete bindy_state_;
 };
 
-void Bindy::add_user_local(const std::string &username, const aes_key_t &key) {
-	tlock bindy_lock(bindy_state_->mutex);
+sole::uuid Bindy::add_user_local(const std::string &username, const aes_key_t &key) {
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
 	std::string query(
-			"INSERT INTO Users VALUES(?, (SELECT id FROM Roles WHERE name='user'), ?);"
+			"INSERT INTO Users VALUES(?, ?, (SELECT id FROM Roles WHERE name='user'), ?);"
 	);
 
 	if(sqlite3_prepare_v2(db, query.data(), (int)query.length(), &stmt, 0) != SQLITE_OK) {
 		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	sqlite3_bind_text(stmt, 1, username.data(), USERNAME_LENGTH, SQLITE_TRANSIENT);
-	sqlite3_bind_blob(stmt, 2, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
+	sole::uuid new_user_uuid = sole::uuid4();
+
+	sqlite3_bind_blob(stmt, 1, &new_user_uuid, sizeof(sole::uuid), SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 2, username.data(), static_cast<int>(username.size()), SQLITE_TRANSIENT);
+	sqlite3_bind_blob(stmt, 3, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
 
 	int cr = sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
@@ -1148,22 +1261,24 @@ void Bindy::add_user_local(const std::string &username, const aes_key_t &key) {
 	if(cr != SQLITE_DONE) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
+	DEBUG("User created(uuid: " << new_user_uuid << ")");
+
+	return new_user_uuid;
 }
 
-void Bindy::del_user_local(const std::string &username) {
-	tlock bindy_lock(bindy_state_->mutex);
+void Bindy::del_user_local(const sole::uuid &uuid) {
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
 	std::string query(
-			"DELETE FROM Users WHERE name=?"
+			"DELETE FROM Users WHERE uuid=?"
 	);
 
 	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
 		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	sqlite3_bind_text(stmt, 1, username.data(), USERNAME_LENGTH, SQLITE_TRANSIENT);
+	sqlite3_bind_blob(stmt, 1, &uuid, sizeof(sole::uuid), SQLITE_TRANSIENT);
 
 	int cr = sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
@@ -1171,15 +1286,16 @@ void Bindy::del_user_local(const std::string &username) {
 	if(cr != SQLITE_DONE) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
+
+	DEBUG("User deleted(uuid: " << uuid << ")");
 }
 
-void Bindy::change_key_local(const std::string &username, const aes_key_t &key) {
-	tlock bindy_lock(bindy_state_->mutex);
+void Bindy::change_key_local(const sole::uuid &uuid, const aes_key_t &key) {
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
 	std::string query(
-			"UPDATE Users SET key=? WHERE name=?"
+			"UPDATE Users SET key=? WHERE uuid=?"
 	);
 
 	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
@@ -1187,7 +1303,7 @@ void Bindy::change_key_local(const std::string &username, const aes_key_t &key) 
 	}
 
 	sqlite3_bind_blob(stmt, 1, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
-	sqlite3_bind_text(stmt, 2, username.data(), USERNAME_LENGTH, SQLITE_TRANSIENT);
+	sqlite3_bind_blob(stmt, 2, &uuid, sizeof(sole::uuid), SQLITE_TRANSIENT);
 
 	int cr = sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
@@ -1195,13 +1311,92 @@ void Bindy::change_key_local(const std::string &username, const aes_key_t &key) 
 	if(cr != SQLITE_DONE) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
+
+	DEBUG("User key changed(uuid: " << uuid << ")");
 }
 
-std::future<void> Bindy::add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key) {
-	if (username.length() != USERNAME_LENGTH) {
-		throw std::runtime_error("Username must be equal to " + USERNAME_LENGTH);
+user_vector_t Bindy::list_users_local() {
+	sqlite3 *db = bindy_state_->sql_conn;
+	sqlite3_stmt *stmt;
+
+	std::string query(
+			"SELECT * FROM Users INNER JOIN Roles ON Users.role = Roles.id"
+	);
+
+	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
+		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
+	// mapping <Table name>.<Column name> to numerical index
+	std::map<std::string, int> index;
+	for(int i = sqlite3_column_count(stmt)-1; i >= 0; i--) {
+		index[std::string(sqlite3_column_table_name(stmt, i)) + "." + std::string(sqlite3_column_name(stmt, i))] = i;
+	}
+
+	std::vector<user_t> result;
+
+	int cr;
+	while(true) {
+		cr = sqlite3_step(stmt);
+		if(cr != SQLITE_ROW) break;
+
+		user_t user;
+		// copy uuid
+		const void *uuid_ptr = sqlite3_column_blob(stmt, index["Users.uuid"]);
+		memcpy(&user.uuid, uuid_ptr, sizeof(sole::uuid));
+
+		// copy username
+		user.name.assign(reinterpret_cast<const char *>(sqlite3_column_text(stmt, index["Users.name"])));
+
+		// copy aes key
+		memcpy(user.key.bytes, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
+
+		result.push_back(std::move(user));
+	}
+
+	sqlite3_finalize(stmt);
+
+	if(cr != SQLITE_DONE) {
+		throw std::runtime_error(sqlite3_errmsg(db));
+	}
+
+	return std::move(result);
+}
+
+void Bindy::set_master_local(const sole::uuid &uuid) {
+	sqlite3 *db = bindy_state_->sql_conn;
+	sqlite3_stmt *stmt;
+
+	std::string query(
+			"BEGIN;"
+			"UPDATE Users SET role=(SELECT id FROM Roles WHERE name='user') WHERE role=(SELECT id FROM Roles WHERE name='master');"
+			"UPDATE Users SET role=(SELECT id FROM Roles WHERE name='master') WHERE uuid=?;"
+			"COMMIT;"
+	);
+
+	const char* left = query.data();
+	uint statement = 0;
+	do {
+		if(sqlite3_prepare_v2(db, left, -1, &stmt, &left) != SQLITE_OK) {
+			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
+		}
+		if(statement == 2)
+			sqlite3_bind_blob(stmt, 1, &uuid, sizeof(sole::uuid), SQLITE_TRANSIENT);
+
+		int cr = sqlite3_step(stmt);
+		if(cr != SQLITE_DONE) {
+			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
+		}
+
+		statement++;
+	} while(left[0]!='\0');
+
+	sqlite3_finalize(stmt);
+
+	DEBUG("Master user changed(uuid: " << uuid << ")");
+}
+
+std::future<sole::uuid> Bindy::add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key) {
 	tlock bindy_lock(bindy_state_->mutex);
 	if (bindy_state_->connections.count(conn_id) != 1) {
 		throw std::runtime_error("Connection not found");
@@ -1209,22 +1404,23 @@ std::future<void> Bindy::add_user_remote(const conn_id_t conn_id, const std::str
 	SuperConnection * sconn = bindy_state_->connections[conn_id];
 
 	// Serialization
-	unsigned int estimated_size = USERNAME_LENGTH + AES_KEY_LENGTH;
+	unsigned int estimated_size = AUTH_DATA_LENGTH + AES_KEY_LENGTH;
 	unsigned int seek = 0;
 	std::vector<uint8_t> content(estimated_size);
 	uint8_t *raw_ptr = content.data();
 
-	memcpy(raw_ptr+seek, username.data(), USERNAME_LENGTH);
-	seek += USERNAME_LENGTH;
+	memcpy(raw_ptr+seek, username.data(), AUTH_DATA_LENGTH);
+	seek += AUTH_DATA_LENGTH;
 	memcpy(raw_ptr+seek, key.bytes, AES_KEY_LENGTH);
 	seek += AES_KEY_LENGTH;
 
 	assert(seek == estimated_size);
 
-	auto completion = std::make_shared<std::promise<void>>();
+	auto completion = std::make_shared<std::promise<sole::uuid>>();
 	ack_callback_t cb = [completion](const std::vector<uint8_t>& msg) {
-		printf("add_user_remote");
-		completion->set_value();
+		sole::uuid new_user_uuid;
+		memcpy(&new_user_uuid, msg.data(), sizeof(sole::uuid));
+		completion->set_value(new_user_uuid);
 	};
 	sconn->send_packet_ack(link_pkt::PacketAddUser, content, cb);
 
@@ -1232,11 +1428,7 @@ std::future<void> Bindy::add_user_remote(const conn_id_t conn_id, const std::str
 }
 
 
-std::future<void> Bindy::del_user_remote(const conn_id_t conn_id, const std::string &username) {
-	if (username.length() != USERNAME_LENGTH) {
-		throw std::runtime_error("Username must be equal to " + USERNAME_LENGTH);
-	}
-
+std::future<void> Bindy::del_user_remote(const conn_id_t conn_id, const sole::uuid &uuid) {
 	tlock bindy_lock(bindy_state_->mutex);
 	if (bindy_state_->connections.count(conn_id) != 1) {
 		throw std::runtime_error("Connection not found");
@@ -1244,19 +1436,18 @@ std::future<void> Bindy::del_user_remote(const conn_id_t conn_id, const std::str
 	SuperConnection * sconn = bindy_state_->connections[conn_id];
 
 	// Serialization
-	unsigned int estimated_size = USERNAME_LENGTH;
+	unsigned int estimated_size = sizeof(sole::uuid);
 	unsigned int seek = 0;
 	std::vector<uint8_t> content(estimated_size);
 	uint8_t *raw_ptr = content.data();
 
-	memcpy(raw_ptr+seek, username.data(), USERNAME_LENGTH);
-	seek += USERNAME_LENGTH;
+	memcpy(raw_ptr+seek, &uuid, sizeof(sole::uuid));
+	seek += sizeof(sole::uuid);
 
 	assert(seek == estimated_size);
 
 	auto completion = std::make_shared<std::promise<void>>();
 	ack_callback_t cb = [completion](const std::vector<uint8_t>& msg) {
-		printf("del_user_remote");
 		completion->set_value();
 	};
 	sconn->send_packet_ack(link_pkt::PacketDelUser, content, cb);
@@ -1264,11 +1455,7 @@ std::future<void> Bindy::del_user_remote(const conn_id_t conn_id, const std::str
 	return completion->get_future();
 }
 
-std::future<void> Bindy::change_key_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key) {
-	if (username.length() != USERNAME_LENGTH) {
-		throw std::runtime_error("Username must be equal to " + USERNAME_LENGTH);
-	}
-
+std::future<void> Bindy::change_key_remote(const conn_id_t conn_id, const sole::uuid &uuid, const aes_key_t &key) {
 	tlock bindy_lock(bindy_state_->mutex);
 	if (bindy_state_->connections.count(conn_id) != 1) {
 		throw std::runtime_error("Connection not found");
@@ -1276,13 +1463,13 @@ std::future<void> Bindy::change_key_remote(const conn_id_t conn_id, const std::s
 	SuperConnection * sconn = bindy_state_->connections[conn_id];
 
 	// Serialization
-	unsigned int estimated_size = USERNAME_LENGTH + AES_KEY_LENGTH;
+	unsigned int estimated_size = sizeof(sole::uuid) + AES_KEY_LENGTH;
 	unsigned int seek = 0;
 	std::vector<uint8_t> content(estimated_size);
 	uint8_t *raw_ptr = content.data();
 
-	memcpy(raw_ptr+seek, username.data(), USERNAME_LENGTH);
-	seek += USERNAME_LENGTH;
+	memcpy(raw_ptr+seek, &uuid, sizeof(sole::uuid));
+	seek += sizeof(sole::uuid);
 	memcpy(raw_ptr+seek, key.bytes, AES_KEY_LENGTH);
 	seek += AES_KEY_LENGTH;
 
@@ -1290,12 +1477,105 @@ std::future<void> Bindy::change_key_remote(const conn_id_t conn_id, const std::s
 
 	auto completion = std::make_shared<std::promise<void>>();
 	ack_callback_t cb = [completion](const std::vector<uint8_t>& msg) {
-		printf("change_key_remote");
 		completion->set_value();
 	};
 	sconn->send_packet_ack(link_pkt::PacketChangeKey, content, cb);
 
 	return completion->get_future();
+}
+
+std::future<user_vector_t> Bindy::list_users_remote(const conn_id_t conn_id) {
+	tlock bindy_lock(bindy_state_->mutex);
+	if (bindy_state_->connections.count(conn_id) != 1) {
+		throw std::runtime_error("Connection not found");
+	}
+	SuperConnection * sconn = bindy_state_->connections[conn_id];
+
+	// Serialization
+	unsigned int estimated_size = AUTH_DATA_LENGTH + AES_KEY_LENGTH;
+	unsigned int seek = 0;
+	std::vector<uint8_t> content(estimated_size);
+	uint8_t *raw_ptr = content.data();
+
+//	memcpy(raw_ptr+seek, username.data(), AUTH_DATA_LENGTH);
+//	seek += AUTH_DATA_LENGTH;
+//	memcpy(raw_ptr+seek, key.bytes, AES_KEY_LENGTH);
+//	seek += AES_KEY_LENGTH;
+
+	assert(seek == estimated_size);
+
+	auto completion = std::make_shared<std::promise<user_vector_t>>();
+//	ack_callback_t cb = [completion](const std::vector<uint8_t>& msg) {
+//		completion->set_value();
+//	};
+//	sconn->send_packet_ack(link_pkt::PacketChangeKey, content, cb);
+
+	return completion->get_future();
+}
+
+std::future<void> Bindy::set_master_remote(const conn_id_t conn_id, const sole::uuid &uuid) {
+	tlock bindy_lock(bindy_state_->mutex);
+	if (bindy_state_->connections.count(conn_id) != 1) {
+		throw std::runtime_error("Connection not found");
+	}
+	SuperConnection * sconn = bindy_state_->connections[conn_id];
+
+	// Serialization
+	unsigned int estimated_size = sizeof(sole::uuid);
+	unsigned int seek = 0;
+	std::vector<uint8_t> content(estimated_size);
+	uint8_t *raw_ptr = content.data();
+
+	memcpy(raw_ptr+seek, &uuid, sizeof(sole::uuid));
+	seek += sizeof(sole::uuid);
+
+	assert(seek == estimated_size);
+
+	auto completion = std::make_shared<std::promise<void>>();
+	ack_callback_t cb = [completion](const std::vector<uint8_t>& msg) {
+		completion->set_value();
+	};
+	sconn->send_packet_ack(link_pkt::PacketSetMaster, content, cb);
+
+	return completion->get_future();
+}
+
+void Bindy::import_user(const std::string path) {
+	sqlite3 *db = bindy_state_->sql_conn;
+	sqlite3_stmt *stmt;
+
+	std::string query(
+		"ATTACH DATABASE ? AS import_user_db;"
+		"BEGIN;"
+		"INSERT INTO main.Users SELECT uuid, name, (SELECT id FROM Roles WHERE name='user'), key FROM import_user_db.Users;"
+		"COMMIT;"
+		"DETACH DATABASE import_user_db;"
+	);
+	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
+		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
+	}
+
+	const char* left = query.data();
+	uint statement = 0;
+	do {
+		if(sqlite3_prepare_v2(db, left, -1, &stmt, &left) != SQLITE_OK) {
+			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
+		}
+		if(statement == 0)
+			sqlite3_bind_text(stmt, 1, path.data(), static_cast<int>(path.length()), SQLITE_TRANSIENT);
+
+		int cr = sqlite3_step(stmt);
+		if(cr != SQLITE_DONE) {
+			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
+		}
+
+		statement++;
+	} while(left[0]!='\0');
+}
+
+void Bindy::export_user(const sole::uuid uuid, const std::string path) {
+	sqlite3 *db = bindy_state_->sql_conn;
+	sqlite3_stmt *stmt;
 }
 
 void Bindy::set_handler (void (* datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
@@ -1410,11 +1690,39 @@ int Bindy::get_data_size (conn_id_t conn_id) {
 	return -1;
 }
 
-std::string Bindy::get_master_login_username () {
-	if (bindy_state_->login_key_map.size() == 0) {
-		throw std::runtime_error("Error in get_master_login_username");
+sole::uuid Bindy::get_master_uuid() {
+	sqlite3 *db = bindy_state_->sql_conn;
+	sqlite3_stmt *stmt;
+
+	std::string query(
+			"SELECT uuid FROM Users WHERE role = (SELECT id FROM Roles WHERE name='master')"
+	);
+
+	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
+		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 	}
-	return bindy_state_->master_login.username;
+
+	// mapping <Table name>.<Column name> to numerical index
+	std::map<std::string, int> index;
+	for(int i = sqlite3_column_count(stmt)-1; i >= 0; i--) {
+		index[std::string(sqlite3_column_table_name(stmt, i)) + "." + std::string(sqlite3_column_name(stmt, i))] = i;
+	}
+
+	sole::uuid result;
+
+	int cr = sqlite3_step(stmt);
+	if(cr == SQLITE_ROW) {
+		memcpy(&result, sqlite3_column_blob(stmt, index["Users.uuid"]), sizeof(sole::uuid));
+	}
+
+	cr = sqlite3_step(stmt);
+	sqlite3_finalize(stmt);
+
+	if(cr != SQLITE_DONE) {
+		throw std::runtime_error(sqlite3_errmsg(db));
+	}
+
+	return result;
 }
 
 void Bindy::set_nodename (std::string nodename)

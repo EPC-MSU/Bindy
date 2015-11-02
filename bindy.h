@@ -20,6 +20,9 @@
 #include <arpa/inet.h>
 #endif
 
+// TODO: remove from library header?
+#include "sole/sole.hpp"
+
 // MSVC symbols export
 #if defined (WIN32) || defined(WIN64)
 #if defined(bindy_EXPORTS)
@@ -34,19 +37,20 @@
 
 namespace bindy
 {
-// TODO: big-endian vs little-endian problem?
-// TODO: possible alignment problems?
+
+const size_t AUTH_DATA_LENGTH = 32;
+const size_t UUID_LENGTH = 16;
 // aes-128
 const size_t AES_KEY_LENGTH = 16;
 typedef struct {
 	uint8_t bytes[AES_KEY_LENGTH];
 } aes_key_t;
 
-const size_t USERNAME_LENGTH = 32;
-typedef struct {
-	char username[USERNAME_LENGTH];
+struct user_t {
+	sole::uuid uuid;
+	std::string name;
 	aes_key_t key;
-} login_pair_t;
+};
 
 enum class link_pkt : uint8_t{
 	PacketData = 0,
@@ -54,12 +58,13 @@ enum class link_pkt : uint8_t{
 	PacketInitReply = 2,
 	PacketLinkInfo = 3,
 	// Administration related packet types
-	PacketAddUser = 4,
-	PacketAddUserAck = 5,
-	PacketDelUser = 6,
-	PacketDelUserAck = 7,
+	PacketAckSuccess = 4,
+	PacketAckFailure = 5,
+	PacketAddUser = 6,
+	PacketDelUser = 7,
 	PacketChangeKey = 8,
-	PacketChangeKeyAck = 9,
+	PacketListUsers = 9,
+	PacketSetMaster = 10,
 	PacketTermRequest = 254,
 	PacketTermReply = 255
 };
@@ -91,7 +96,7 @@ typedef uint32_t conn_id_t;
 
 const conn_id_t conn_id_invalid = 0;
 
-typedef std::vector<login_pair_t> login_vector_t;
+typedef std::vector<user_t> user_vector_t;
 
 void BINDY_EXPORT sleep_ms(size_t ms);
 
@@ -124,13 +129,21 @@ public:
 	*	Sets the callback function which will receive unstructured data from the peers.
 	*	@param[in] datasink Pointer to the callback function which will process the data.
 	*/
-	void add_user_local(const std::string &username, const aes_key_t &key);
-	void del_user_local(const std::string &username);
-	void change_key_local(const std::string &username, const aes_key_t &key);
+	sole::uuid add_user_local(const std::string &username, const aes_key_t &key);
+	void del_user_local(const sole::uuid &uuid);
+	void change_key_local(const sole::uuid &uuid, const aes_key_t &key);
+	user_vector_t list_users_local();
+	void set_master_local(const sole::uuid &uuid);
 
-	std::future<void> add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
-	std::future<void> del_user_remote(const conn_id_t conn_id, const std::string &username);
-	std::future<void> change_key_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
+
+	std::future<sole::uuid> add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
+	std::future<void> del_user_remote(const conn_id_t conn_id, const sole::uuid &uuid);
+	std::future<void> change_key_remote(const conn_id_t conn_id, const sole::uuid &uuid, const aes_key_t &key);
+	std::future<user_vector_t> list_users_remote(const conn_id_t conn_id);
+	std::future<void> set_master_remote(const conn_id_t conn_id, const sole::uuid &uuid);
+
+	void import_user(const std::string path);
+	void export_user(const sole::uuid uuid, const std::string path);
 
 	/*!
 	*	Sets the callback function which will receive unstructured data from the peers.
@@ -261,14 +274,14 @@ private:
 	*	Outputs username of the root user.
 	*	\return name description
 	*/
-	std::string get_master_login_username();
+	sole::uuid get_master_uuid();
 
 	/*!
 	*	Finds key by user name.
 	*	@param[in] Username.
 	*	\return  A pair of values, if the first is true then the second contains valid key for this username.
 	*/
-	std::pair<bool, aes_key_t> key_by_name(std::string name);
+	std::pair<bool, aes_key_t> key_by_uuid(const sole::uuid& uuid);
 
 	/*!
 	*	Internal method for sending data.

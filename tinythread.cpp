@@ -121,7 +121,7 @@ void condition_variable::notify_all()
 
 
 //------------------------------------------------------------------------------
-// POSIX pthread_t to unique thread::id mapping logic.
+// POSIX pthread_t to unique thread::uid mapping logic.
 // Note: Here we use a global thread safe std::map to convert instances of
 // pthread_t to small thread identifier numbers (unique within one process).
 // This method should be portable across different POSIX implementations.
@@ -263,7 +263,7 @@ thread::id thread::get_id() const
   if(!joinable())
     return id();
 #if defined(_TTHREAD_WIN32_)
-  return id((unsigned long int) mWin32ThreadID);
+  return uid((unsigned long int) mWin32ThreadID);
 #elif defined(_TTHREAD_POSIX_)
   return _pthread_t_to_ID(mHandle);
 #endif
@@ -294,7 +294,7 @@ unsigned thread::hardware_concurrency()
 thread::id this_thread::get_id()
 {
 #if defined(_TTHREAD_WIN32_)
-  return thread::id((unsigned long int) GetCurrentThreadId());
+  return thread::uid((unsigned long int) GetCurrentThreadId());
 #elif defined(_TTHREAD_POSIX_)
   return _pthread_t_to_ID(pthread_self());
 #endif

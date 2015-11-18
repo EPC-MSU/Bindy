@@ -7665,9 +7665,9 @@ SQLITE_API int SQLITE_STDCALL sqlite3_vtab_on_conflict(sqlite3 *);
 **
 ** [[SQLITE_SCANSTAT_SELECTID]] <dt>SQLITE_SCANSTAT_SELECT</dt>
 ** <dd>^The "int" variable pointed to by the T parameter will be set to the
-** "select-id" for the X-th loop.  The select-id identifies which query or
-** subquery the loop is part of.  The main query has a select-id of zero.
-** The select-id is the same value as is output in the first column
+** "select-uid" for the X-th loop.  The select-uid identifies which query or
+** subquery the loop is part of.  The main query has a select-uid of zero.
+** The select-uid is the same value as is output in the first column
 ** of an [EXPLAIN QUERY PLAN] query.
 ** </dl>
 */

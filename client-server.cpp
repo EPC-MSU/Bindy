@@ -29,24 +29,34 @@ int main (int argc, char *argv[])
 		} catch (...) {
 			fail("Error establishing connection to remote address.");
 		}
-		try {
-			auto result = bindy->list_users_local();
-
+//		try {
+			// Send user message
 			std::string text = std::string(argv[3]);
 			std::vector<uint8_t> data = std::vector<uint8_t>(text.begin(), text.end());
-//			bindy->send_data(conn_id, data);
-			auto uuid_future = bindy->add_user_remote(conn_id, {"qqqqaaaabbbbccccqqqqaaaabbbbcccc", }, bindy::aes_key_t{"5aqq4qqqqqqqqq\0"});
-			uuid_future.wait();
-			auto uuid = uuid_future.get();
-			std::cout << uuid;
-			bindy->set_master_remote(conn_id, uuid).wait();
+			bindy->send_data(conn_id, data);
 
-//			bindy->change_key_remote(conn_id, uuid, bindy::aes_key_t{"xxxxxxxxxxxxxx\0"}).wait();
-//			bindy->del_user_remote(conn_id, uuid	).wait();
+			// Send service messages
+			auto uid_f = bindy->add_user_remote(conn_id, "test-user-04", bindy::aes_key_t{"xxxxxxxxxxxxxx\0"});
+			uid_f.wait();
+			auto uid = uid_f.get();
+
+			bindy->set_master_remote(conn_id, uid).wait();
+			bindy->change_key_remote(conn_id, uid, bindy::aes_key_t{"vvvvvvvvvvvvvv\0"}).wait();
+
+			auto users_f = bindy->list_users_remote(conn_id);
+			users_f.wait();
+			auto users = users_f.get();
+
+			bindy->export_user(uid, "/home/vlad/RIP/Bindy/tinytest.sqlite");
+
+			bindy->del_user_remote(conn_id, uid).wait();
+
+			bindy->import_user("/home/vlad/RIP/Bindy/tinytest.sqlite");
+
 			bindy::sleep_ms(1000); // let the server process the data
-		} catch (...) {
-			fail("Error sending data.");
-		}
+//		} catch (...) {
+//			fail("Error sending data.");
+//		}
 	} else if (argc == 2) { // I am a Server
 		try {
 			bindy.reset(new bindy::Bindy(argv[1], true, true));

@@ -42,6 +42,7 @@ typedef sole::uuid uuid_t;
 typedef uuid_t user_id_t;
 typedef uint8_t role_id_t;
 
+// used for handshake
 const size_t AUTH_DATA_LENGTH = 32;
 const size_t UUID_LENGTH = sizeof(uuid_t);
 const size_t USERNAME_LENGTH = 128;

@@ -1,0 +1,3 @@
+[submodule "vendor/sole"]
+	path = vendor/sole
+	url = https://github.com/r-lyeh/sole.git

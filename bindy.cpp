@@ -1200,32 +1200,43 @@ aes_key_t Bindy::key_by_uid(const user_id_t &uid) {
 //	return;
 //}
 //
-//void read_binary_config(std::string filename, BindyState *state) {
-//	std::ifstream is (filename.data(), std::ifstream::binary);
-//	if (is.good()) {
-//		is.cursorg (0, is.end);
-//		//std::streampos length = is.tellg();
-//		is.cursorg (0, is.beg);
-//	} else {
-//		throw wrong_config_format();
-//	}
-//	login_pair_t login;
-//	int count = 0;
-//	while (is.good()) {
-//		is.read ((char*)&login, sizeof(login_pair_t));
-//		if (is.gcount() == sizeof(login_pair_t)) {
-//			if (count == 0) { // the first key becomes our root
-//				state->master_login = login;
-//			}
-//			// FIXME: first \0 terminal is interpreted as end of string
-//			state->login_key_map[std::string(login.username)] = login.key;
-//		}
-//		else
-//			break;
-//		count++;
-//	}
-//	is.close();
-//}
+user_vector_t extract_from_old_config(std::string filename) {
+	std::ifstream is (filename.data(), std::ifstream::binary);
+	if(is.good()) {
+		is.seekg (0, is.end);
+		//std::streampos length = is.tellg();
+		is.seekg (0, is.beg);
+	} else {
+		throw std::runtime_error("bad binary config file");
+	}
+
+	user_vector_t users;
+	int count = 0;
+	while(true) {
+		user_t user;
+
+		user.name.reserve(AUTH_DATA_LENGTH);
+		for(unsigned short i = 0; is.peek() != '\0' && i < AUTH_DATA_LENGTH; i++)
+			user.name.push_back(static_cast<char>(is.get()));
+		is.ignore(AUTH_DATA_LENGTH-user.name.length());
+
+		is.readsome(reinterpret_cast<char *>(user.key.bytes), AES_KEY_LENGTH);
+
+		user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
+		user.uid = sole::uuid1();
+
+		if(is.good()) {
+			users.push_back(std::move(user));
+		} else {
+			break;
+		}
+
+		count++;
+	}
+	is.close();
+
+	return std::move(users);
+}
 
 void init_db(sqlite3 *db, const user_vector_t &users) {
 	sqlite3_stmt *stmt;
@@ -1243,11 +1254,13 @@ void init_db(sqlite3 *db, const user_vector_t &users) {
 	}
 
 	query_stream << "INSERT INTO Users VALUES ";
+	short int i = 0;
 	for(const user_t &user : users) {
 		assert(user.role == 1 || user.role == 2);
 		query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
+		query_stream << (i < users.size()-1 ? "," : ";");
+		i++;
 	}
-	query_stream << ";";
 
 	query_stream << "COMMIT;";
 
@@ -1255,18 +1268,18 @@ void init_db(sqlite3 *db, const user_vector_t &users) {
 	auto query = query_stream.str();
 	const char *left = query.data();
 	uint statement = 0;
-	uint user_index = 0;
-	uint bind_index = 1;
 	do {
 		if(sqlite3_prepare_v2(db, left, -1, &stmt, &left) != SQLITE_OK) {
 			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 		}
 
-		if(statement >= static_statements.size() && statement < static_statements.size() + users.size()) {
-			auto user = users.at(user_index++);
-			sqlite3_bind_blob(stmt, bind_index++, &user.uid, sizeof(user_id_t), SQLITE_TRANSIENT);
-			sqlite3_bind_text(stmt, bind_index++, user.name.data(), AUTH_DATA_LENGTH, SQLITE_TRANSIENT);
-			sqlite3_bind_blob(stmt, bind_index++, user.key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
+		if(statement == static_statements.size()) {
+			unsigned int bind_index = 1;
+			for(auto& user: users) {
+				sqlite3_bind_blob(stmt, bind_index++, &user.uid, sizeof(user_id_t), SQLITE_TRANSIENT);
+				sqlite3_bind_text(stmt, bind_index++, user.name.data(), AUTH_DATA_LENGTH, SQLITE_TRANSIENT);
+				sqlite3_bind_blob(stmt, bind_index++, user.key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
+			}
 		}
 
 		int cr = sqlite3_step(stmt);
@@ -1299,6 +1312,12 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		sqlite3_close(bindy_state_->sql_conn);
 		throw std::runtime_error("cannot open sqlite");
 	}
+
+//	sqlite3 *converter_conn;
+//	if (sqlite3_open_v2("/home/vlad/RIP/Bindy/converted_keyfile.sqlite", &(converter_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
+//		sqlite3_close(bindy_state_->sql_conn); throw std::runtime_error("cannot open sqlite");
+//	}
+//	init_db(converter_conn, extract_from_old_config("/home/vlad/RIP/Bindy/sample_keyfile.bin"));
 
 //	sqlite3 *test_sql_conn;
 //	if (sqlite3_open_v2("/home/vlad/RIP/Bindy/test.sqlite", &(test_sql_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {

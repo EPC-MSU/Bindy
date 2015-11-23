@@ -9,7 +9,7 @@
 #include "bindy.h"
 
 #include <fstream>
-#include <atomic>
+#include <cstring>
 #include <sstream>
 #include <algorithm>
 
@@ -72,7 +72,7 @@ void sleep_ms(size_t ms) {
 }
 
 /*! Acknowledgement identifier */
-typedef uuid_t ack_id_t;
+typedef sole::uuid ack_id_t;
 
 /*! A helper type which contains a single message(type+content) to be encrypted and sent over the TCP socket. */
 struct Message {
@@ -413,7 +413,7 @@ void Connection::send_packet_ack(const link_pkt type, std::vector<uint8_t> &cont
 
 	unsigned long orig_size = content.size();
 	content.resize(content.size() + sizeof(ack_id_t));
-	memcpy(content.data() + orig_size, &request_id, sizeof(ack_id_t));
+	std::memcpy(content.data() + orig_size, &request_id, sizeof(ack_id_t));
 
 	ack_mutex->lock();
 	(*ack_callbacks)[request_id] = {std::move(success), std::move(failure)};
@@ -506,7 +506,7 @@ Message Connection::recv_packet() {
 		throw e;
 	}
 	header_t header;
-	memcpy(&header, recovered_head.c_str(), (sizeof(header_t)));
+	std::memcpy(&header, recovered_head.c_str(), (sizeof(header_t)));
 
 	// body data recv
 	int body_enc_size = header.data_length + AES::BLOCKSIZE;
@@ -584,7 +584,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 		uint8_t auth_data[AUTH_DATA_LENGTH];
 		memset(auth_data, 0, AUTH_DATA_LENGTH);
 		if(use_bcast) {
-			memcpy(auth_data, reinterpret_cast<const void *>(&bcast_data.data.at(0)), AUTH_DATA_LENGTH);
+			std::memcpy(auth_data, reinterpret_cast<const void *>(&bcast_data.data.at(0)), AUTH_DATA_LENGTH);
 		}
 		else {
 			sock->Receive(auth_data, AUTH_DATA_LENGTH, 0);
@@ -592,14 +592,14 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 
 		// Authorization happens here
 		user_id_t uid;
-		memcpy(&uid, auth_data, sizeof(user_id_t));
+		std::memcpy(&uid, auth_data, sizeof(user_id_t));
 		aes_key_t key = bindy->key_by_uid(uid);
 
 		send_key->Assign(key.bytes, AES_KEY_LENGTH);
 		recv_key->Assign(key.bytes, AES_KEY_LENGTH);
 
 		if(use_bcast) {
-			memcpy(recv_iv->BytePtr(), reinterpret_cast<const void *>(&bcast_data.data.at(AUTH_DATA_LENGTH)),
+			std::memcpy(recv_iv->BytePtr(), reinterpret_cast<const void *>(&bcast_data.data.at(AUTH_DATA_LENGTH)),
 				   AES_KEY_LENGTH);
 		}
 		else {
@@ -645,11 +645,11 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 		uint8_t auth_data[AUTH_DATA_LENGTH];
 		memset(auth_data, 0, AUTH_DATA_LENGTH);
 //		std::string mname = bindy->get_master_login_username();
-		memcpy(auth_data, &master.uid, sizeof(user_id_t));
+		std::memcpy(auth_data, &master.uid, sizeof(user_id_t));
 		if(use_bcast) {
 			uint8_t bc_packet[AUTH_DATA_LENGTH + AES_KEY_LENGTH];
-			memcpy(bc_packet, auth_data, AUTH_DATA_LENGTH);
-			memcpy(bc_packet + AUTH_DATA_LENGTH, send_iv->BytePtr(), AES_KEY_LENGTH);
+			std::memcpy(bc_packet, auth_data, AUTH_DATA_LENGTH);
+			std::memcpy(bc_packet + AUTH_DATA_LENGTH, send_iv->BytePtr(), AES_KEY_LENGTH);
 			// accept incoming connection(s?) from server(s?) who will hear our broadcast and want to talk back
 			Socket listen_sock;
 			listen_sock.Create(SOCK_STREAM);
@@ -723,8 +723,8 @@ Message ack_failure_from(const std::string &text) {
 	std::vector<uint8_t> reply_content(sizeof(uint8_t) + text.size());
 	uint8_t *raw_ptr = reply_content.data();
 
-	memcpy(raw_ptr, &length, sizeof(uint8_t));
-	memcpy(raw_ptr + sizeof(uint8_t), text.data(), length);
+	std::memcpy(raw_ptr, &length, sizeof(uint8_t));
+	std::memcpy(raw_ptr + sizeof(uint8_t), text.data(), length);
 
 	return Message{link_pkt::PacketAckFailure, std::move(reply_content)};
 }
@@ -747,7 +747,7 @@ Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 	username = std::string(reinterpret_cast<const char *>(request_cursor), name_length);
 	request_cursor += USERNAME_LENGTH;
 
-	memcpy(key.bytes, request_cursor, AES_KEY_LENGTH);
+	std::memcpy(key.bytes, request_cursor, AES_KEY_LENGTH);
 	request_cursor += AES_KEY_LENGTH;
 
 	try {
@@ -758,7 +758,7 @@ Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 
 		uint8_t *reply_cursor = reply.data();
 
-		memcpy(reply_cursor, &uid, sizeof(user_id_t));
+		std::memcpy(reply_cursor, &uid, sizeof(user_id_t));
 		reply_cursor += sizeof(user_id_t);
 
 		return Message{link_pkt::PacketAckSuccess, std::move(reply)};
@@ -777,7 +777,7 @@ Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 
 	user_id_t uid;
 
-	memcpy(&uid, request_cursor, sizeof(user_id_t));
+	std::memcpy(&uid, request_cursor, sizeof(user_id_t));
 	request_cursor += sizeof(user_id_t);
 
 	try {
@@ -799,10 +799,10 @@ Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 	user_id_t uid;
 	aes_key_t key;
 
-	memcpy(&uid, request_cursor, sizeof(user_id_t));
+	std::memcpy(&uid, request_cursor, sizeof(user_id_t));
 	request_cursor += sizeof(user_id_t);
 
-	memcpy(key.bytes, request_cursor, AES_KEY_LENGTH);
+	std::memcpy(key.bytes, request_cursor, AES_KEY_LENGTH);
 	request_cursor += AES_KEY_LENGTH;
 
 	try {
@@ -829,13 +829,13 @@ Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 
 		for(unsigned int i = 0; i < users.size(); i++) {
 			user_t &user = users[i];
-			memcpy(reply_cursor, &user.uid, sizeof(user_id_t));
+			std::memcpy(reply_cursor, &user.uid, sizeof(user_id_t));
 			reply_cursor += sizeof(user_id_t);
-			memcpy(reply_cursor, user.name.data(), USERNAME_LENGTH);
+			std::memcpy(reply_cursor, user.name.data(), USERNAME_LENGTH);
 			reply_cursor += USERNAME_LENGTH;
-			memcpy(reply_cursor, user.key.bytes, AES_KEY_LENGTH);
+			std::memcpy(reply_cursor, &user.key, AES_KEY_LENGTH);
 			reply_cursor += AES_KEY_LENGTH;
-			memcpy(reply_cursor, &user.role, sizeof(role_id_t));
+			std::memcpy(reply_cursor, &user.role, sizeof(role_id_t));
 			reply_cursor += sizeof(role_id_t);
 		}
 
@@ -853,13 +853,13 @@ Message on_set_master_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 
 	uint8_t *request_cursor = request.data();
 
-	uuid_t uuid;
+	user_id_t uid;
 
-	memcpy(&uuid, request_cursor, sizeof(user_id_t));
+	std::memcpy(&uid, request_cursor, sizeof(user_id_t));
 	request_cursor += sizeof(user_id_t);
 
 	try {
-		bindy.set_master_local(uuid);
+		bindy.set_master_local(uid);
 
 		return Message{link_pkt::PacketAckSuccess, {}};
 	} catch(std::runtime_error &e) {
@@ -886,7 +886,7 @@ void socket_thread_function(void *arg) {
 				// we assume that last bytes are message uid
 				ack_id_t msg_id;
 				unsigned long orig_request_size = request.content.size() - sizeof(ack_id_t);
-				memcpy(&msg_id, request.content.data() + orig_request_size, sizeof(ack_id_t));
+				std::memcpy(&msg_id, request.content.data() + orig_request_size, sizeof(ack_id_t));
 				request.content.resize(orig_request_size);
 
 				if(request.type == link_pkt::PacketAckSuccess || request.type == link_pkt::PacketAckFailure) {
@@ -914,7 +914,7 @@ void socket_thread_function(void *arg) {
 
 					unsigned long orig_reply_size = reply.content.size();
 					reply.content.resize(orig_reply_size + sizeof(ack_id_t));
-					memcpy(reply.content.data() + orig_reply_size, &msg_id, sizeof(ack_id_t));
+					std::memcpy(reply.content.data() + orig_reply_size, &msg_id, sizeof(ack_id_t));
 					conn->send_packet(reply.type, reply.content);
 				}
 			}
@@ -1085,19 +1085,19 @@ void broadcast_thread_function(void *arg) {
 	bcast_sock.CloseSocket();
 }
 
-aes_key_t Bindy::key_by_uid(const user_id_t &uid) {
+aes_key_t Bindy::key_by_uid(const user_id_t& uid) {
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
 	std::string query(
-		"SELECT key FROM Users WHERE uuid=?"
+		"SELECT key FROM Users WHERE uuid=?;"
 	);
 
 	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
 		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
+	auto test = sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
 
 	// mapping <Table name>.<Column name> to numerical index
 	std::map<std::string, int> index;
@@ -1113,7 +1113,7 @@ aes_key_t Bindy::key_by_uid(const user_id_t &uid) {
 
 	aes_key_t result;
 	memset(result.bytes, 0, AES_KEY_LENGTH);
-	memcpy(result.bytes, sqlite3_column_blob(stmt, index["Users.key"]), sizeof(user_id_t));
+	std::memcpy(result.bytes, sqlite3_column_blob(stmt, index["Users.key"]), sizeof(aes_key_t));
 	// ensure that there is only one user with such uid;
 	// if cr != SQLITE_DONE then database is probably corrupted
 	cr = sqlite3_step(stmt);
@@ -1175,15 +1175,15 @@ aes_key_t Bindy::key_by_uid(const user_id_t &uid) {
 //
 //		user_t user;
 //		// copy uid
-//		const void *uuid_ptr = sqlite3_column_blob(stmt, index["Users.uid"]);
-//		memcpy(&user.uid.ab, uuid_ptr, sizeof(user.uid.ab));
-//		memcpy(&user.uid.cd, uuid_ptr + sizeof(user.uid.ab), sizeof(user.uid.cd));
+//		const void *uuid_ptr = sqlite3_column_blob(stmt, index["Users.uuid"]);
+//		std::memcpy(&user.uid.ab, uuid_ptr, sizeof(user.uid.ab));
+//		std::memcpy(&user.uid.cd, uuid_ptr + sizeof(user.uid.ab), sizeof(user.uid.cd));
 //
 //		// copy username
 //		user.name.assign(sqlite3_column_text(stmt, index["Users.name"]));
 //
 //		// copy aes key
-//		memcpy(user.key.bytes, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
+//		std::memcpy(&user.key, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
 //
 //		if(strcmp((char *)sqlite3_column_text(stmt, index["Roles.name"]), "master") == 0) {
 //			state->master = user;
@@ -1200,6 +1200,16 @@ aes_key_t Bindy::key_by_uid(const user_id_t &uid) {
 //	return;
 //}
 //
+
+user_id_t uuid_to_uid(sole::uuid&& uuid) {
+	user_id_t uid;
+	memset(uid.bytes, 0, sizeof(user_id_t));
+	memcpy(uid.bytes, &uuid, sizeof(sole::uuid));
+	DEBUG("sizeof(user_id_t) = " << sizeof(user_id_t));
+	DEBUG("sizeof(sole::uuid) = " << sizeof(sole::uuid));
+	return uid;
+}
+
 user_vector_t extract_from_old_config(std::string filename) {
 	std::ifstream is (filename.data(), std::ifstream::binary);
 	if(is.good()) {
@@ -1215,15 +1225,12 @@ user_vector_t extract_from_old_config(std::string filename) {
 	while(true) {
 		user_t user;
 
-		user.name.reserve(AUTH_DATA_LENGTH);
-		for(unsigned short i = 0; is.peek() != '\0' && i < AUTH_DATA_LENGTH; i++)
-			user.name.push_back(static_cast<char>(is.get()));
-		is.ignore(AUTH_DATA_LENGTH-user.name.length());
-
-		is.readsome(reinterpret_cast<char *>(user.key.bytes), AES_KEY_LENGTH);
+		memset(&user.uid, 0, sizeof(user_id_t));
+		is.read(reinterpret_cast<char *>(&user.uid), AUTH_DATA_LENGTH);
+		user.name = std::string(reinterpret_cast<char *>(&user.uid));
+		is.read(reinterpret_cast<char *>(&user.key), AES_KEY_LENGTH);
 
 		user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
-		user.uid = sole::uuid1();
 
 		if(is.good()) {
 			users.push_back(std::move(user));
@@ -1278,7 +1285,7 @@ void init_db(sqlite3 *db, const user_vector_t &users) {
 			for(auto& user: users) {
 				sqlite3_bind_blob(stmt, bind_index++, &user.uid, sizeof(user_id_t), SQLITE_TRANSIENT);
 				sqlite3_bind_text(stmt, bind_index++, user.name.data(), AUTH_DATA_LENGTH, SQLITE_TRANSIENT);
-				sqlite3_bind_blob(stmt, bind_index++, user.key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
+				sqlite3_bind_blob(stmt, bind_index++, &user.key, AES_KEY_LENGTH, SQLITE_TRANSIENT);
 			}
 		}
 
@@ -1350,7 +1357,7 @@ Bindy::~Bindy() {
 };
 
 
-uuid_t Bindy::add_user_local(const std::string &username, const aes_key_t &key) {
+user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key) {
 	if(username.length() > USERNAME_LENGTH)
 		throw std::runtime_error("name too long");
 
@@ -1366,7 +1373,7 @@ uuid_t Bindy::add_user_local(const std::string &username, const aes_key_t &key) 
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	user_id_t uid = sole::uuid4();
+	user_id_t uid = uuid_to_uid(sole::uuid1());
 
 	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
 	sqlite3_bind_text(stmt, 2, username.data(), static_cast<int>(username.size()), SQLITE_TRANSIENT);
@@ -1378,7 +1385,7 @@ uuid_t Bindy::add_user_local(const std::string &username, const aes_key_t &key) 
 	if(cr != SQLITE_DONE) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
-	DEBUG("User created(uid: " << uid << ")");
+	DEBUG("User created(uid: " << uid.bytes << ")");
 
 	return uid;
 }
@@ -1405,7 +1412,7 @@ void Bindy::del_user_local(const user_id_t &uid) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	DEBUG("User deleted(uid: " << uid << ")");
+	DEBUG("User deleted(uid: " << uid.bytes << ")");
 }
 
 void Bindy::change_key_local(const user_id_t &uid, const aes_key_t &key) {
@@ -1431,7 +1438,7 @@ void Bindy::change_key_local(const user_id_t &uid, const aes_key_t &key) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	DEBUG("User key changed(uid: " << uid << ")");
+	DEBUG("User key changed(uid: " << uid.bytes << ")");
 }
 
 user_vector_t Bindy::list_users_local() {
@@ -1466,9 +1473,9 @@ user_vector_t Bindy::list_users_local(std::function<bool(user_t &user)> filter) 
 
 		user_t user;
 
-		memcpy(&user.uid, sqlite3_column_blob(stmt, index["Users.uid"]), sizeof(user_id_t));
+		std::memcpy(&user.uid, sqlite3_column_blob(stmt, index["Users.uuid"]), sizeof(user_id_t));
 		user.name.assign(reinterpret_cast<const char *>(sqlite3_column_text(stmt, index["Users.name"])));
-		memcpy(user.key.bytes, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
+		std::memcpy(&user.key, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
 		user.role = static_cast<role_id_t>(sqlite3_column_int(stmt, index["Users.role"]));
 
 		if(filter(user))
@@ -1517,12 +1524,12 @@ void Bindy::set_master_local(const user_id_t &uid) {
 
 	sqlite3_finalize(stmt);
 
-	DEBUG("Master user changed(uid: " << uid << ")");
+	DEBUG("Master user changed(uid: " << uid.bytes << ")");
 }
 
 std::exception_ptr exception_from_reply(const std::vector<uint8_t> &reply) {
 	uint8_t length;
-	memcpy(&length, reply.data(), sizeof(uint8_t));
+	std::memcpy(&length, reply.data(), sizeof(uint8_t));
 	std::string error_text(reinterpret_cast<const char *>(reply.data()) + sizeof(uint8_t), length);
 	return std::make_exception_ptr(std::runtime_error(error_text));
 }
@@ -1545,19 +1552,19 @@ std::future<user_id_t> Bindy::add_user_remote(const conn_id_t conn_id, const std
 	uint8_t *cursor = content.data();
 
 	memset(cursor, 0, USERNAME_LENGTH);
-	memcpy(cursor, username.data(), username.length());
+	std::memcpy(cursor, username.data(), username.length());
 	cursor += USERNAME_LENGTH;
-	memcpy(cursor, key.bytes, AES_KEY_LENGTH);
+	std::memcpy(cursor, key.bytes, AES_KEY_LENGTH);
 	cursor += AES_KEY_LENGTH;
 
 	assert((cursor - content.data()) == estimated);
 
-	auto completion = std::make_shared<std::promise<uuid_t>>();
+	auto completion = std::make_shared<std::promise<user_id_t>>();
 
 	// Reply handlers
 	ack_callback_t success = [completion](const std::vector<uint8_t> &reply) {
 		user_id_t new_user_id;
-		memcpy(&new_user_id, reply.data(), sizeof(user_id_t));
+		std::memcpy(&new_user_id, reply.data(), sizeof(user_id_t));
 		completion->set_value(new_user_id);
 	};
 	ack_callback_t failure = [completion](const std::vector<uint8_t> &reply) {
@@ -1584,7 +1591,7 @@ std::future<void> Bindy::del_user_remote(const conn_id_t conn_id, const user_id_
 
 	uint8_t *cursor = content.data();
 
-	memcpy(cursor, &uid, sizeof(user_id_t));
+	std::memcpy(cursor, &uid, sizeof(user_id_t));
 	cursor += sizeof(user_id_t);
 
 	assert((cursor - content.data()) == estimated);
@@ -1618,9 +1625,9 @@ std::future<void> Bindy::change_key_remote(const conn_id_t conn_id, const user_i
 
 	uint8_t *cursor = content.data();
 
-	memcpy(cursor, &uid, sizeof(user_id_t));
+	std::memcpy(cursor, &uid, sizeof(user_id_t));
 	cursor += sizeof(user_id_t);
-	memcpy(cursor, key.bytes, AES_KEY_LENGTH);
+	std::memcpy(cursor, key.bytes, AES_KEY_LENGTH);
 	cursor += AES_KEY_LENGTH;
 
 	assert((cursor - content.data()) == estimated);
@@ -1663,7 +1670,7 @@ std::future<user_vector_t> Bindy::list_users_remote(const conn_id_t conn_id) {
 		for(unsigned long i = 0; i < reply.size() / user_size; i++) {
 			user_t user;
 
-			memcpy(&user.uid, cursor, sizeof(user_id_t));
+			std::memcpy(&user.uid, cursor, sizeof(user_id_t));
 			cursor += sizeof(user_id_t);
 
 			// we assume that names are either null-terminated or occupy whole USERNAME_LENGTH
@@ -1674,10 +1681,10 @@ std::future<user_vector_t> Bindy::list_users_remote(const conn_id_t conn_id) {
 			user.name = std::string(reinterpret_cast<const char *>(cursor), name_length);
 			cursor += USERNAME_LENGTH;
 
-			memcpy(user.key.bytes, cursor, AES_KEY_LENGTH);
+			std::memcpy(&user.key, cursor, AES_KEY_LENGTH);
 			cursor += AES_KEY_LENGTH;
 
-			memcpy(&user.role, cursor, sizeof(role_id_t));
+			std::memcpy(&user.role, cursor, sizeof(role_id_t));
 			cursor += sizeof(role_id_t);
 
 			users.push_back(std::move(user));
@@ -1708,7 +1715,7 @@ std::future<void> Bindy::set_master_remote(const conn_id_t conn_id, const user_i
 
 	uint8_t *cursor = content.data();
 
-	memcpy(cursor, &uid, sizeof(user_id_t));
+	std::memcpy(cursor, &uid, sizeof(user_id_t));
 	cursor += sizeof(user_id_t);
 
 	assert((cursor-content.data()) == estimated);
@@ -1764,7 +1771,7 @@ void Bindy::import_user(const std::string path) {
 	} while(left[0] != '\0');
 }
 
-void Bindy::export_user(const user_id_t uid, const std::string path) {
+void Bindy::export_user(const user_id_t& uid, const std::string path) {
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
@@ -1790,10 +1797,10 @@ void Bindy::export_user(const user_id_t uid, const std::string path) {
 	if(cr != SQLITE_ROW) {
 		sqlite3_finalize(stmt); throw std::runtime_error("User not found");
 	}
-	memcpy(&user.uid, sqlite3_column_blob(stmt, index["Users.uid"]), sizeof(user_id_t));
+	std::memcpy(&user.uid, sqlite3_column_blob(stmt, index["Users.uuid"]), sizeof(user_id_t));
 	user.name.assign(reinterpret_cast<const char *>(sqlite3_column_text(stmt, index["Users.name"])));
-	memcpy(user.key.bytes, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
-	// this user is the only user in new database file; make him master
+	std::memcpy(&user.key, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
+	// this user is the only user in new database - make him master
 	user.role = 1;
 
 	cr = sqlite3_step(stmt);
@@ -1951,9 +1958,9 @@ user_t Bindy::get_master() {
 
 	int cr = sqlite3_step(stmt);
 	if(cr == SQLITE_ROW) {
-		memcpy(&user.uid, sqlite3_column_blob(stmt, index["Users.uid"]), sizeof(user_id_t));
+		std::memcpy(&user.uid, sqlite3_column_blob(stmt, index["Users.uuid"]), sizeof(user_id_t));
 		user.name.assign(reinterpret_cast<const char *>(sqlite3_column_text(stmt, index["Users.name"])));
-		memcpy(user.key.bytes, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
+		std::memcpy(&user.key, sqlite3_column_blob(stmt, index["Users.key"]), sizeof(aes_key_t));
 		user.role = static_cast<role_id_t>(sqlite3_column_int(stmt, index["Users.role"]));
 	}
 
@@ -2041,5 +2048,9 @@ void Bindy::initialize_network() {
 void Bindy::shutdown_network() {
 	CryptoPP::Socket::ShutdownSockets();
 }
+
+//bool user_id_t::operator==(const user_id_t &other) const {
+//	return std::memcmp(this->bytes, other.bytes, AUTH_DATA_LENGTH) == 0;
+//}
 
 }; // namespace bindy

@@ -20,9 +20,6 @@
 #include <arpa/inet.h>
 #endif
 
-// TODO: remove from library header?
-#include "sole/sole.hpp"
-
 // MSVC symbols export
 #if defined (WIN32) || defined(WIN64)
 #if defined(bindy_EXPORTS)
@@ -37,17 +34,17 @@
 
 namespace bindy
 {
-
-typedef sole::uuid uuid_t;
-typedef uuid_t user_id_t;
-typedef uint8_t role_id_t;
-
 // used for handshake
 const size_t AUTH_DATA_LENGTH = 32;
-const size_t UUID_LENGTH = sizeof(uuid_t);
 const size_t USERNAME_LENGTH = 128;
 // aes-128
 const size_t AES_KEY_LENGTH = 16;
+
+struct user_id_t {
+	uint8_t bytes[AUTH_DATA_LENGTH];
+//	bool operator ==(const user_id_t& other) const;
+};
+typedef uint8_t role_id_t;
 typedef struct {
 	uint8_t bytes[AES_KEY_LENGTH];
 } aes_key_t;
@@ -136,19 +133,19 @@ public:
 	*	Sets the callback function which will receive unstructured data from the peers.
 	*	@param[in] datasink Pointer to the callback function which will process the data.
 	*/
-	uuid_t add_user_local(const std::string &username, const aes_key_t &key);
-	void del_user_local(const uuid_t &uuid);
-	void change_key_local(const uuid_t &uuid, const aes_key_t &key);
+	user_id_t add_user_local(const std::string &username, const aes_key_t &key);
+	void del_user_local(const user_id_t &uuid);
+	void change_key_local(const user_id_t &uuid, const aes_key_t &key);
 	user_vector_t list_users_local();
 	user_vector_t list_users_local(std::function<bool(user_t&)>);
-	void set_master_local(const uuid_t &uuid);
+	void set_master_local(const user_id_t &uuid);
 
 
 	std::future<user_id_t> add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
-	std::future<void> del_user_remote(const conn_id_t conn_id, const uuid_t &uuid);
-	std::future<void> change_key_remote(const conn_id_t conn_id, const uuid_t &uuid, const aes_key_t &key);
+	std::future<void> del_user_remote(const conn_id_t conn_id, const user_id_t &uuid);
+	std::future<void> change_key_remote(const conn_id_t conn_id, const user_id_t &uuid, const aes_key_t &key);
 	std::future<user_vector_t> list_users_remote(const conn_id_t conn_id);
-	std::future<void> set_master_remote(const conn_id_t conn_id, const uuid_t &uuid);
+	std::future<void> set_master_remote(const conn_id_t conn_id, const user_id_t &uuid);
 
 	/*!
 	*	Imports user from external sqlite-based state file.
@@ -161,7 +158,7 @@ public:
 	*	@param[in] uid Find user for export by identifier.
 	*	@param[in] path Filesystem path where new sqlite-based state file is to be created.
 	*/
-	void export_user(const uuid_t uuid, const std::string path);
+	void export_user(const user_id_t& uid, const std::string path);
 
 	/*!
 	*	Sets the callback function which will receive unstructured data from the peers.
@@ -299,7 +296,7 @@ private:
 	*	@param[in] Username.
 	*	\return  Returns valid key for this uid.
 	*/
-	aes_key_t key_by_uid(const uuid_t& uid);
+	aes_key_t key_by_uid(const user_id_t& uid);
 
 	/*!
 	*	Internal method for sending data.

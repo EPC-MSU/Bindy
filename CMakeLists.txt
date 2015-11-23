@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 2.8)
 project(bindy CXX C)
 # When both CXX and C used, compilation fails without -ldl flag
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ldl")
+# LibRealTime is used by sole on some platforms
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSQLITE_ENABLE_COLUMN_METADATA")
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)

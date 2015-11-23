@@ -1205,8 +1205,6 @@ user_id_t uuid_to_uid(sole::uuid&& uuid) {
 	user_id_t uid;
 	memset(uid.bytes, 0, sizeof(user_id_t));
 	memcpy(uid.bytes, &uuid, sizeof(sole::uuid));
-	DEBUG("sizeof(user_id_t) = " << sizeof(user_id_t));
-	DEBUG("sizeof(sole::uuid) = " << sizeof(sole::uuid));
 	return uid;
 }
 

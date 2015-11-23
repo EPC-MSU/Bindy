@@ -416,7 +416,7 @@ void Connection::send_packet_ack(const link_pkt type, std::vector<uint8_t> &cont
 	memcpy(content.data() + orig_size, &request_id, sizeof(ack_id_t));
 
 	ack_mutex->lock();
-	ack_callbacks->emplace(request_id, std::make_pair(std::move(success), std::move(failure)));
+	(*ack_callbacks)[request_id] = {std::move(success), std::move(failure)};
 	ack_mutex->unlock();
 
 	send_packet(type, content);

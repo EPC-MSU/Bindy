@@ -1,11 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(bindy CXX C)
-# When both CXX and C used, compilation fails without -ldl flag
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ldl")
-# LibRealTime is used by sole on some platforms
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSQLITE_ENABLE_COLUMN_METADATA")
+project(bindy)
+
+enable_language(CXX)
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	# It is required to build a rpath framework
@@ -65,6 +62,14 @@ endif()
 if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
+
+# When both CXX and C used, compilation fails without -ldl flag
+# LibRealTime is used by sole on some platforms
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ldl -lrt")
+
+
+enable_language(C)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSQLITE_ENABLE_COLUMN_METADATA")
 
 # creates variables CRYPTOPP_FOUND, CRYPTOPP_LIBRARY and CRYPTOPP_INCLUDE_DIR
 include(FindPackageHandleStandardArgs)

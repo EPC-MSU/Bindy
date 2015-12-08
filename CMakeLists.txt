@@ -1,11 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(bindy CXX C)
-# When both CXX and C used, compilation fails without -ldl flag
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ldl")
-# LibRealTime is used by sole on some platforms
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSQLITE_ENABLE_COLUMN_METADATA")
+
+project(bindy)
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	# It is required to build a rpath framework
@@ -66,6 +62,15 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
 
+if(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
+    # When both CXX and C used, compilation fails without -ldl flag
+    # librt is used by sole on some platforms
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt -ldl")
+endif()
+
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSQLITE_ENABLE_COLUMN_METADATA")
+
 # creates variables CRYPTOPP_FOUND, CRYPTOPP_LIBRARY and CRYPTOPP_INCLUDE_DIR
 include(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(CRYPTOPP DEFAULT_MSG CRYPTOPP_INCLUDE_DIR CRYPTOPP_LIBRARY)
@@ -78,7 +83,7 @@ endif()
 include_directories(${CRYPTOPP_INCLUDE_DIR})
 include_directories("vendor")
 
-add_library(bindy SHARED bindy.cpp tinythread.cpp vendor/sole/sole.cpp vendor/sqlite/sqlite3.c)
+add_library(bindy SHARED bindy.cpp tinythread.cpp sole/sole.cpp sqlite/sqlite3.c)
 target_link_libraries(bindy ${CRYPTOPP_LIBRARY})
 if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
 	target_link_libraries(bindy ws2_32)

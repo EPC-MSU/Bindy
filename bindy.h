@@ -70,28 +70,7 @@ enum class link_pkt : uint8_t{
 	PacketDelUser = 7,
 	PacketChangeKey = 8,
 	PacketListUsers = 9,
-	PacketSetMaster = 10,
 };
-
-/*!
-* Header type for the Message class. Contains information about message contents.
-*/
-typedef struct {
-	/*! Packet length in bytes, excluding the header size. */
-	uint32_t data_length;
-
-	/*! Packet type. */
-	link_pkt packet_type;
-
-	/*! Reserved for future use. */
-	uint8_t  reserved1;
-
-	/*! Reserved for future use. */
-	uint8_t  reserved2;
-
-	/*! Reserved for future use. */
-	uint8_t  reserved3;
-} header_t;
 
 /*!
 * Connection identifier type definition.

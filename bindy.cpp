@@ -74,6 +74,26 @@ void sleep_ms(size_t ms) {
 /*! Acknowledgement identifier */
 typedef sole::uuid ack_id_t;
 
+/*!
+* Header type for the Message class. Contains information about message contents.
+*/
+typedef struct {
+	/*! Packet length in bytes, excluding the header size. */
+	uint32_t data_length;
+
+	/*! Packet type. */
+	link_pkt packet_type;
+
+	/*! Reserved for future use. */
+	uint8_t  reserved1;
+
+	/*! Reserved for future use. */
+	uint8_t  reserved2;
+
+	/*! Reserved for future use. */
+	uint8_t  reserved3;
+} header_t;
+
 /*! A helper type which contains a single message(type+content) to be encrypted and sent over the TCP socket. */
 struct Message {
 	link_pkt type;
@@ -629,8 +649,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 		auto m_recv2 = recv_packet();
 
 		send_packet(link_pkt::PacketLinkInfo, {});
-	}
-	else { // this party initiates the connection
+	} else { // this party initiates the connection
 		CryptoPP::AutoSeededRandomPool prng;
 		prng.GenerateBlock(*send_iv, send_iv->size());
 		recv_iv->Assign(*send_iv);
@@ -717,16 +736,8 @@ void Connection::disconnect_self() {
 	bindy->disconnect(conn_id);
 }
 
-
 Message ack_failure_from(const std::string &text) {
-	uint8_t length = static_cast<uint8_t>(text.length());
-	std::vector<uint8_t> reply_content(sizeof(uint8_t) + text.size());
-	uint8_t *raw_ptr = reply_content.data();
-
-	std::memcpy(raw_ptr, &length, sizeof(uint8_t));
-	std::memcpy(raw_ptr + sizeof(uint8_t), text.data(), length);
-
-	return Message{link_pkt::PacketAckFailure, std::move(reply_content)};
+	return Message{link_pkt::PacketAckFailure, {text.begin(), text.end()}};
 }
 
 Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) noexcept {

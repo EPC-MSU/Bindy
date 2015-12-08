@@ -1761,7 +1761,7 @@ void Bindy::import_user(const std::string path) {
 	}
 
 	const char *left = query.data();
-	uint statement = 0;
+	uint8_t statement = 0;
 	do {
 		if(sqlite3_prepare_v2(db, left, -1, &stmt, &left) != SQLITE_OK) {
 			sqlite3_finalize(stmt);

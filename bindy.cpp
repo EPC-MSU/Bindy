@@ -740,9 +740,9 @@ Message ack_failure_from(const std::string &text) {
 	return Message{link_pkt::PacketAckFailure, {text.begin(), text.end()}};
 }
 
-Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) noexcept {
+Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != USERNAME_LENGTH + AES_KEY_LENGTH) {
-		return ack_failure_from(u8"incorrect message length");
+		return ack_failure_from("incorrect message length");
 	}
 
 	uint8_t *request_cursor = request.data();
@@ -780,9 +780,9 @@ Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 	}
 }
 
-Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) noexcept {
+Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t))
-		return ack_failure_from(u8"incorrect message length");
+		return ack_failure_from("incorrect message length");
 
 	uint8_t *request_cursor = request.data();
 
@@ -801,9 +801,9 @@ Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 	}
 }
 
-Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) noexcept {
+Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t) + AES_KEY_LENGTH)
-		return ack_failure_from(u8"incorrect message length");
+		return ack_failure_from("incorrect message length");
 
 	uint8_t *request_cursor = request.data();
 
@@ -826,9 +826,9 @@ Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 	}
 }
 
-Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) noexcept {
+Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != 0) {
-		return ack_failure_from(u8"incorrect message length");
+		return ack_failure_from("incorrect message length");
 	}
 
 	try {
@@ -858,9 +858,9 @@ Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 	}
 }
 
-Message on_set_master_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) noexcept {
+Message on_set_master_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t))
-		return ack_failure_from(u8"incorrect message length");
+		return ack_failure_from("incorrect message length");
 
 	uint8_t *request_cursor = request.data();
 

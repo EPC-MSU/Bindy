@@ -70,6 +70,7 @@ enum class link_pkt : uint8_t{
 	PacketDelUser = 7,
 	PacketChangeKey = 8,
 	PacketListUsers = 9,
+	PacketSetMaster = 10,
 };
 
 /*!

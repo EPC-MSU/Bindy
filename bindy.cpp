@@ -1283,7 +1283,7 @@ void init_db(sqlite3 *db, const user_vector_t &users) {
 	// FIXME: performs full copy
 	auto query = query_stream.str();
 	const char *left = query.data();
-	uint statement = 0;
+	uint8_t statement = 0;
 	do {
 		if(sqlite3_prepare_v2(db, left, -1, &stmt, &left) != SQLITE_OK) {
 			sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
@@ -1512,7 +1512,7 @@ void Bindy::set_master_local(const user_id_t &uid) {
 	);
 
 	const char *left = query.data();
-	uint statement = 0;
+	uint8_t statement = 0;
 	do {
 		if(sqlite3_prepare_v2(db, left, -1, &stmt, &left) != SQLITE_OK) {
 			sqlite3_finalize(stmt);

@@ -25,6 +25,8 @@ else()
 endif()
 endif()
 
+# Configure sqlite
+add_definitions(-DSQLITE_ENABLE_COLUMN_METADATA)
 
 # Find crypto++ library. Hinted path is CRYPTOPP_PATH
 # Set CRYPTOPP_SHARED_LIBRARY to any value to use shared library
@@ -67,9 +69,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
     # librt is used by sole on some platforms
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt -ldl")
 endif()
-
-
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSQLITE_ENABLE_COLUMN_METADATA")
 
 # creates variables CRYPTOPP_FOUND, CRYPTOPP_LIBRARY and CRYPTOPP_INCLUDE_DIR
 include(FindPackageHandleStandardArgs)

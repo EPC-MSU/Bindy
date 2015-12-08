@@ -83,7 +83,7 @@ endif()
 include_directories(${CRYPTOPP_INCLUDE_DIR})
 include_directories("vendor")
 
-add_library(bindy SHARED bindy.cpp tinythread.cpp sole/sole.cpp sqlite/sqlite3.c)
+add_library(bindy SHARED bindy.cpp tinythread.cpp vendor/sole/sole.cpp vendor/sqlite/sqlite3.c)
 target_link_libraries(bindy ${CRYPTOPP_LIBRARY})
 if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
 	target_link_libraries(bindy ws2_32)

@@ -339,6 +339,8 @@ Connection::Connection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool 
 		this->send_mutex = new tthread::mutex();
 		this->recv_mutex = new tthread::mutex();
 		this->buffer = new std::deque<uint8_t>;
+	} else {
+		throw std::runtime_error("unexpected connection count");
 	}
 }
 
@@ -355,6 +357,8 @@ Connection::Connection(Connection* other) : Countable(other->conn_id) {
 		this->send_mutex = other->send_mutex;
 		this->recv_mutex = other->recv_mutex;
 		this->buffer = other->buffer;
+	} else {
+		throw std::runtime_error("unexpected connection count");
 	}
 }
 

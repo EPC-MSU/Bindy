@@ -286,6 +286,11 @@ public:
 	* Helper method to establish connection.
 	*/
 	void initial_exchange(bcast_data_t bcast_data);
+	
+	/*!
+	* Helper method to check if connection initialized itself successfully.
+	*/
+	bool isactive();
 
 private:
 	Connection(const Connection& other);
@@ -303,6 +308,7 @@ private:
 	conn_id_t conn_id;
 	bool inits_connect;
 	void disconnect_self();
+	bool * active;
 
 	in_addr get_ip();
 
@@ -347,6 +353,8 @@ Connection::Connection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool 
 		this->send_mutex = new tthread::mutex();
 		this->recv_mutex = new tthread::mutex();
 		this->buffer = new std::deque<uint8_t>;
+		this->active = new bool;
+		*(this->active) = false;
 	} else {
 		throw std::runtime_error("unexpected connection count");
 	}
@@ -365,6 +373,7 @@ Connection::Connection(Connection* other) : Countable(other->conn_id) {
 		this->send_mutex = other->send_mutex;
 		this->recv_mutex = other->recv_mutex;
 		this->buffer = other->buffer;
+		this->active = other->active;
 	} else {
 		throw std::runtime_error("unexpected connection count");
 	}
@@ -401,6 +410,7 @@ Connection::~Connection() {
 		delete recv_iv;
 		delete send_mutex;
 		delete recv_mutex;
+		delete active;
 	}
 }
 
@@ -746,6 +756,12 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 
 		Message m_recv2 = recv_packet();
 	}
+	*active = true;
+}
+
+bool Connection::isactive()
+{
+	return *active;
 }
 
 in_addr Connection::get_ip() {
@@ -854,7 +870,6 @@ void main_thread_function(void *arg) {
 		listen_sock.Bind(bindy->port(), NULL);
 	} catch (std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
-		throw e;
 	}
 	if (!set_socket_keepalive_nodelay(&listen_sock))  { // all connection sockets inherit required options from listening socket
 		std::cerr << "Could not set socket options." << std::endl;
@@ -1105,6 +1120,9 @@ void Bindy::send_data (conn_id_t conn_id, std::vector<uint8_t> data) {
 	if (bindy_state_->connections.count(conn_id) == 1) { // should be 1 exactly...
 		tlock lock(bindy_state_->mutex);
 		SuperConnection * sconn = bindy_state_->connections[conn_id];
+		if (!sconn->isactive()) {
+			throw std::runtime_error("Connection is not yet initialized.");
+		}
 		DEBUG( "sending " << data.size() << " raw bytes..." );
 		DEBUG( "bytes =  " << hex_encode(data) );
 		sconn->send_packet(&message);

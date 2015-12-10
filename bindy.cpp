@@ -334,6 +334,7 @@ SuperConnection::SuperConnection(Bindy * _bindy, Socket *_socket, conn_id_t conn
 	sp->conn = this;
 	tthread::thread * t = new tthread::thread(socket_thread_function, sp);
 	t->detach();
+	delete t;
 }
 
 SuperConnection::~SuperConnection() {

@@ -80,6 +80,12 @@ typedef struct bcast_data_t {
 	std::string addr;
 } bcast_data_t;
 
+/*! Socket thread parameter struct definition */
+typedef struct socket_thread_param_t {
+	bcast_data_t bcast_data;
+	Connection* conn;
+} socket_thread_param_t;
+
 /*! This function takes a pointer to an array of chars and its size and returns its representation in hex as a string. */
 std::string hex_encode(const char* s, size_t size) {
 	std::string encoded;
@@ -317,8 +323,10 @@ public:
 SuperConnection::SuperConnection(Bindy * _bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect, bcast_data_t bcast_data)
  : Connection(_bindy, _socket, conn_id, _inits_connect)
 {
-	initial_exchange(bcast_data);
-	tthread::thread * t = new tthread::thread(socket_thread_function, this);
+	socket_thread_param_t* sp = new socket_thread_param_t;
+	sp->bcast_data = bcast_data;
+	sp->conn = this;
+	tthread::thread * t = new tthread::thread(socket_thread_function, sp);
 	t->detach();
 }
 
@@ -759,9 +767,11 @@ void Connection::disconnect_self() {
 
 /*! Function which is executed in a separate thread. Receives and processes data from a socket. */
 void socket_thread_function(void* arg) {
+	socket_thread_param_t* sp = (socket_thread_param_t*)arg;
 	Connection* conn = nullptr;
 	try {
-		conn = new Connection((Connection*)arg);
+		conn = new Connection(sp->conn);
+		conn->initial_exchange(sp->bcast_data);
 		while (true) { // actually: while m.packet_type != PacketLinkTermRequest
 			Message m = conn->recv_packet();
 
@@ -778,6 +788,7 @@ void socket_thread_function(void* arg) {
 	} catch (...) {
 		DEBUG( "Caught exception, deleting connection..." );
 	}
+	delete sp;
 	conn->disconnect_self();
 	delete conn;
 }

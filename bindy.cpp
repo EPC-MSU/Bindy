@@ -78,6 +78,7 @@ typedef tthread::lock_guard<tthread::mutex> tlock;
 typedef struct bcast_data_t {
 	std::vector<uint8_t> data;
 	std::string addr;
+	bool use_bcast;
 } bcast_data_t;
 
 /*! Socket thread parameter struct definition */
@@ -626,7 +627,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 {
 	std::string remote_nodename;
 
-	bool use_bcast = (sock == nullptr);
+	bool use_bcast = bcast_data.use_bcast;
 
 	if (!inits_connect) { // this party accepts the connection
 		// Initial exchange
@@ -661,7 +662,6 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 
 		// The tcp socket is still null, connect it first
 		if (use_bcast) {
-			sock = new Socket();
 			sock->Create(SOCK_STREAM);
 			DEBUG("Connecting to " << bcast_data.addr);
 			if (!sock->Connect(bcast_data.addr.c_str(), bindy->port())) {
@@ -730,7 +730,6 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 			t.tv_sec = 5;
 			t.tv_usec = 0;
 			if (listen_sock.ReceiveReady(&t)) {
-				sock = new Socket();
 				sock->Create(SOCK_STREAM);
 				listen_sock.Accept(*sock); // The sock is now connected, use it to continue exchange
 			}
@@ -895,6 +894,7 @@ void main_thread_function(void *arg) {
 				bcast_data_t empty;
 				empty.addr = std::string();
 				empty.data = std::vector<uint8_t>();
+				empty.use_bcast = false;
 				SuperConnection *sc = new SuperConnection(bindy, sock, local_conn_id, false, empty);
 				bindy->add_connection(local_conn_id, sc);
 			}
@@ -955,7 +955,8 @@ void broadcast_thread_function(void *arg) {
 				bcast_data_t not_empty;
 				not_empty.addr = addrbuf;
 				not_empty.data = std::vector<uint8_t>(setuprq, setuprq+size);
-				SuperConnection *sc = new SuperConnection(bindy, nullptr, local_conn_id, false, not_empty);
+				not_empty.use_bcast = true;
+				SuperConnection *sc = new SuperConnection(bindy, new Socket(), local_conn_id, false, not_empty);
 				bindy->add_connection(local_conn_id, sc);
 			}
 			catch (...) {
@@ -1071,7 +1072,8 @@ conn_id_t Bindy::connect (std::string addr) {
 			bcast_data_t empty;
 			empty.addr = std::string();
 			empty.data = std::vector<uint8_t>();
-			sc = new SuperConnection(this, nullptr, conn_id, true, empty);
+			empty.use_bcast = true;
+			sc = new SuperConnection(this, new Socket(), conn_id, true, empty);
 			bindy_state_->connections[conn_id] = sc;
 		}
 		catch (...) { // ?
@@ -1102,6 +1104,7 @@ conn_id_t Bindy::connect (std::string addr) {
 				bcast_data_t empty;
 				empty.addr = std::string();
 				empty.data = std::vector<uint8_t>();
+				empty.use_bcast = false;
 				sc = new SuperConnection(this, sock, conn_id, true, empty);
 				bindy_state_->connections[conn_id] = sc;
 			}

@@ -335,7 +335,6 @@ SuperConnection::SuperConnection(Bindy * _bindy, Socket *_socket, conn_id_t conn
 	sp->conn = this;
 	tthread::thread * t = new tthread::thread(socket_thread_function, sp);
 	t->detach();
-	delete t;
 }
 
 SuperConnection::~SuperConnection() {
@@ -660,7 +659,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data)
 		}
 		send_iv->Assign(*recv_iv);
 
-		// The tcp socket is still null, connect it first
+		// The tcp socket is still not connected, connect it first
 		if (use_bcast) {
 			sock->Create(SOCK_STREAM);
 			DEBUG("Connecting to " << bcast_data.addr);

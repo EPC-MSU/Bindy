@@ -28,7 +28,7 @@ Bindy is based on several open-source solutions.
 
 CryptoPP can be used in two modes:
 
-1. As a shared library. To use shared library set CRYPTOPP_SHARED_LIBRARY to the cryptopp shared library filepath and invoke cmake with a `-DCRYPTOPP_SHARED_LIBRARY=TRUE` flag.
+1. As a shared library. To use shared library set `CRYPTOPP_SHARED_LIBRARY` to the cryptopp shared library filepath and invoke cmake with a `-DCRYPTOPP_SHARED_LIBRARY=TRUE` flag.
 
 2. As a static library with PIC support. Please note that packaged static cryptopp is never compiled with `-fPIC` so you must compile it yourself.
 

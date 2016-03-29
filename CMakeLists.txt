@@ -64,7 +64,7 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
 
-if(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
+if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
     # When both CXX and C used, compilation fails without -ldl flag
     # librt is used by sole on some platforms
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt -ldl")

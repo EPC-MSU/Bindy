@@ -34,6 +34,14 @@
 
 namespace bindy
 {
+// Bindy version
+typedef struct semver_t {
+	unsigned int major;
+	unsigned int minor;
+	unsigned int patch;
+} semver_t;
+const semver_t VERSION = {0, 1, 0};
+
 // used for handshake
 const size_t AUTH_DATA_LENGTH = 32;
 const size_t USERNAME_LENGTH = 128;

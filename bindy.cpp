@@ -45,7 +45,7 @@ using CryptoPP::Socket;
 namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
-#define DEBUG_ENABLE
+//#define DEBUG_ENABLE
 #define DEBUG_PREFIX ""
 #ifdef DEBUG_ENABLE
 #define DEBUG(text) { stdout_mutex->lock(); std::cout << DEBUG_PREFIX << text << std::endl; stdout_mutex->unlock(); }

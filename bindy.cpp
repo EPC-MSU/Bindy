@@ -21,7 +21,13 @@
 
 #include <fstream>
 #include <stdexcept>
+
+#if defined(COMPILER_SUPPORTS_CXX0X) && !defined(COMPILER_SUPPORTS_CXX11)
+#include <stdatomic.h>
+#define nullptr NULL
+#else
 #include <atomic>
+#endif
 
 using CryptoPP::StringSink;
 using CryptoPP::StringSource;

@@ -23,8 +23,13 @@
 #include <stdexcept>
 
 #if defined(COMPILER_SUPPORTS_CXX0X) && !defined(COMPILER_SUPPORTS_CXX11)
-#include <stdatomic.h>
 #define nullptr NULL
+#endif
+
+// only for pre-4.6 gcc compilers
+#if defined(COMPILER_SUPPORTS_CXX0X) && !defined(COMPILER_SUPPORTS_CXX11) && \
+	  defined(__GNUC__) && (__GNUC__ == 4) && (__GNUC_MINOR__ <= 4)
+#include <stdatomic.h>
 #else
 #include <atomic>
 #endif

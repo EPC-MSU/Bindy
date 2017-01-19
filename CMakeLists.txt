@@ -29,9 +29,11 @@ endif()
 add_definitions(-DSQLITE_ENABLE_COLUMN_METADATA)
 
 # Find crypto++ library. Hinted path is CRYPTOPP_PATH
-# Set CRYPTOPP_SHARED_LIBRARY to any value to use shared library
-if(CRYPTOPP_SHARED_LIBRARY)
-	set(CRYPTOPP_SHARED cryptopp)
+option(BINDY_CRYPTOPP_SHARED "build with libcryptopp as shared library which can be found by ld" OFF)
+if(BINDY_CRYPTOPP_SHARED)
+	set(CRYPTOPP_NAMES cryptopp)
+else()
+    set(CRYPTOPP_NAMES libcryptopp.a cryptlib.lib)
 endif()
 
 find_path(CRYPTOPP_INCLUDE_DIR aes.h
@@ -45,7 +47,7 @@ find_path(CRYPTOPP_INCLUDE_DIR aes.h
 	)
 
 find_library(CRYPTOPP_LIBRARY
-	NAMES ${CRYPTOPP_SHARED} libcryptopp.a cryptlib.lib
+	NAMES ${CRYPTOPP_NAMES}
 	PATH_SUFFIXES lib64 lib
 	PATHS
 	/usr/local
@@ -64,12 +66,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
 
-if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
-    # When both CXX and C used, compilation fails without -ldl flag
-    # librt is used by sole on some platforms
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lrt -ldl")
-endif()
-
 # creates variables CRYPTOPP_FOUND, CRYPTOPP_LIBRARY and CRYPTOPP_INCLUDE_DIR
 include(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(CRYPTOPP DEFAULT_MSG CRYPTOPP_INCLUDE_DIR CRYPTOPP_LIBRARY)
@@ -84,9 +80,17 @@ include_directories("vendor")
 
 add_library(bindy SHARED bindy.cpp tinythread.cpp vendor/sole/sole.cpp vendor/sqlite/sqlite3.c)
 target_link_libraries(bindy ${CRYPTOPP_LIBRARY})
+if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
+    # librt is used by sole on some platforms
+    target_link_libraries(bindy rt)
+endif()
 if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
 	target_link_libraries(bindy ws2_32)
 endif()
 
 add_executable(bindy-main client-server.cpp)
-target_link_libraries(bindy-main bindy)
+target_link_libraries(bindy-main bindy dl)
+if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
+    # When both CXX and C used, compilation fails without -ldl flag on Linux systems
+    target_link_libraries(bindy-main dl)
+endif()

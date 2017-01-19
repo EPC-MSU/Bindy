@@ -89,7 +89,7 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
 endif()
 
 add_executable(bindy-main client-server.cpp)
-target_link_libraries(bindy-main bindy dl)
+target_link_libraries(bindy-main bindy)
 if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
     # When both CXX and C used, compilation fails without -ldl flag on Linux systems
     target_link_libraries(bindy-main dl)

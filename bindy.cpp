@@ -6,18 +6,19 @@
 ///
 
 
-#include "bindy.h"
+#include "bindy-static.h"
 
 #include <fstream>
 #include <cstring>
 #include <sstream>
 #include <algorithm>
+#include <cassert>
 
-#include <cryptlib.h>
-#include <osrng.h>
-#include <hex.h>
-#include <gcm.h>
-#include <socketft.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/gcm.h>
+#include <cryptopp/socketft.h>
 
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
@@ -594,6 +595,46 @@ void Connection::callback_data(std::vector<uint8_t> data) {
 	bindy->callback_data(this->conn_id, data);
 }
 
+user_vector_t extract_from_old_config(std::string filename) {
+    std::ifstream is (filename.data(), std::ifstream::binary);
+    if(is.good()) {
+        is.seekg (0, is.end);
+        //std::streampos length = is.tellg();
+        is.seekg (0, is.beg);
+    } else {
+        throw std::runtime_error("bad binary config file");
+    }
+
+    user_vector_t users;
+    int count = 0;
+    while(true) {
+        user_t user;
+
+        memset(&user.uid, 0, sizeof(user_id_t));
+        is.read(reinterpret_cast<char *>(&user.uid), AUTH_DATA_LENGTH);
+        user.name = std::string(reinterpret_cast<char *>(&user.uid));
+        is.read(reinterpret_cast<char *>(&user.key), AES_KEY_LENGTH);
+
+        user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
+
+        if(is.good()) {
+            users.push_back(std::move(user));
+        } else {
+            break;
+        }
+
+        count++;
+    }
+    is.close();
+
+    return std::move(users);
+}
+
+user_t get_old_master() {
+    auto users = extract_from_old_config("/tmp/bindy/sample_keyfile.bin");
+    return users[0];
+}
+
 void Connection::initial_exchange(bcast_data_t bcast_data) {
 //	std::string remote_nodename;
 
@@ -656,6 +697,10 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 
 		// Authorize ourselves here
 		user_t master = bindy->get_master();
+//        user_t master = get_old_master();
+//        bool error = (
+//            memcmp(master.uid.bytes, new_master.uid.bytes, AES_KEY_LENGTH)
+//        );
 
 		send_key->Assign(master.key.bytes, AES_KEY_LENGTH);
 		recv_key->Assign(master.key.bytes, AES_KEY_LENGTH);
@@ -979,7 +1024,7 @@ ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
 #endif
 
-	// Also disable Nagle, because we want faster response and each Bindy packet is a complete packet that should be wrapped in TCP and sent right away
+	// Also disable Nagle, because we want faster response and each bindy packet is a complete packet that should be wrapped in TCP and sent right away
 	optval = 1;
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)));
 #endif
@@ -1055,7 +1100,7 @@ void broadcast_thread_function(void *arg) {
 	try {
 		while(recv_ok) {
 			char setuprq[AUTH_DATA_LENGTH + AES_KEY_LENGTH];
-			//unsigned int size = bcast_sock.Receive(setuprq, sizeof (setuprq), NULL);
+			// unsigned int size = bcast_sock.Receive(setuprq, sizeof (setuprq), NULL);
 			// Cannot use Cryptopp wrapper here because it doesn't provide src addr for broadcasts
 			struct sockaddr from;
 			socklen_t fromlen = sizeof(from);
@@ -1138,80 +1183,6 @@ aes_key_t Bindy::key_by_uid(const user_id_t& uid) {
 	return result;
 }
 
-//class wrong_config_format: public std::runtime_error {
-//public:
-//	wrong_config_format()
-//			: runtime_error("file doesn't seem to be config file")
-//	{}
-//};
-
-//void read_sqlite_config(std::string filename, BindyState *state) {
-//	sqlite3 *db = state->sql_conn;
-//	sqlite3_stmt *stmt;
-//
-//	char query[] =
-//			"SELECT Users.name, Roles.name, Users.key from Users"
-//					" INNER JOIN Roles ON Users.role=Roles.uid";
-//
-//	if(sqlite3_prepare_v2(db, query, -1, &stmt, 0)  != SQLITE_OK) {
-//		sqlite3_finalize(stmt); throw wrong_config_format();
-//	}
-//
-//	// mapping <Table name>.<Column name> to numerical index
-//	std::map<std::string, int> index;
-//	for(int i = sqlite3_column_count(stmt)-1; i >= 0; i--) {
-//		index[std::string(sqlite3_column_table_name(stmt, i)) + "." + std::string(sqlite3_column_name(stmt, i))] = i;
-//	}
-//
-//	bool query_valid =
-//			index.find("Users.name") != index.end() &&
-//			index.find("Roles.name") != index.end() &&
-//			index.find("Users.key") != index.end();
-//
-//	int cr;
-//	while(true) {
-//		cr = sqlite3_step(stmt);
-//		if(cr != SQLITE_ROW) break;
-//
-//		int raw_name_len = sqlite3_column_bytes(stmt, index["Users.name"]);
-//
-//		bool entry_valid =
-//				query_valid &&
-//				raw_name_len <= AUTH_DATA_LENGTH &&
-//				sqlite3_column_bytes(stmt, index["Users.key"])  == AES_KEY_LENGTH;
-//
-//		if(!entry_valid) {
-//			sqlite3_finalize(stmt); throw wrong_config_format();
-//		}
-//
-//		user_t user;
-//		// copy uid
-//		const void *uuid_ptr = sqlite3_column_blob(stmt, index["Users.uuid"]);
-//		std::memcpy(&user.uid.ab, uuid_ptr, sizeof(user.uid.ab));
-//		std::memcpy(&user.uid.cd, uuid_ptr + sizeof(user.uid.ab), sizeof(user.uid.cd));
-//
-//		// copy username
-//		user.name.assign(sqlite3_column_text(stmt, index["Users.name"]));
-//
-//		// copy aes key
-//		std::memcpy(&user.key, sqlite3_column_blob(stmt, index["Users.key"]), AES_KEY_LENGTH);
-//
-//		if(strcmp((char *)sqlite3_column_text(stmt, index["Roles.name"]), "master") == 0) {
-//			state->master = user;
-//		}
-//		state->login_key_map[std::string(login.username, raw_name_len)] = login.key;
-//	}
-//
-//	if(cr != SQLITE_DONE) {
-//		sqlite3_finalize(stmt); throw wrong_config_format();
-//	}
-//
-//	sqlite3_finalize(stmt);
-//
-//	return;
-//}
-//
-
 user_id_t uuid_to_uid(sole::uuid&& uuid) {
 	user_id_t uid;
 	memset(uid.bytes, 0, sizeof(user_id_t));
@@ -1219,42 +1190,7 @@ user_id_t uuid_to_uid(sole::uuid&& uuid) {
 	return uid;
 }
 
-user_vector_t extract_from_old_config(std::string filename) {
-	std::ifstream is (filename.data(), std::ifstream::binary);
-	if(is.good()) {
-		is.seekg (0, is.end);
-		//std::streampos length = is.tellg();
-		is.seekg (0, is.beg);
-	} else {
-		throw std::runtime_error("bad binary config file");
-	}
-
-	user_vector_t users;
-	int count = 0;
-	while(true) {
-		user_t user;
-
-		memset(&user.uid, 0, sizeof(user_id_t));
-		is.read(reinterpret_cast<char *>(&user.uid), AUTH_DATA_LENGTH);
-		user.name = std::string(reinterpret_cast<char *>(&user.uid));
-		is.read(reinterpret_cast<char *>(&user.key), AES_KEY_LENGTH);
-
-		user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
-
-		if(is.good()) {
-			users.push_back(std::move(user));
-		} else {
-			break;
-		}
-
-		count++;
-	}
-	is.close();
-
-	return std::move(users);
-}
-
-void init_db(sqlite3 *db, const user_vector_t &users) {
+void init_db(sqlite3 *db, const user_vector_t &users={}) {
 	sqlite3_stmt *stmt;
 	std::stringstream query_stream;
 
@@ -1262,23 +1198,24 @@ void init_db(sqlite3 *db, const user_vector_t &users) {
 		"CREATE TABLE Users (uuid TEXT UNIQUE NOT NULL PRIMARY KEY, name TEXT NOT NULL, role INTEGER NOT NULL, key BLOB (16) NOT NULL UNIQUE);",
 		"CREATE TRIGGER SingleMasterInsert BEFORE INSERT ON Users FOR EACH ROW WHEN NEW.role = 1 BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;",
 		"CREATE TRIGGER SingleMasterUpdate BEFORE UPDATE OF role ON Users FOR EACH ROW WHEN NEW.role = 1  BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;",
-		"BEGIN;",
 	};
 
 	for(std::string &s : static_statements) {
 		query_stream << s;
 	}
 
-	query_stream << "INSERT INTO Users VALUES ";
-	short int i = 0;
-	for(const user_t &user : users) {
-		assert(user.role == 1 || user.role == 2);
-		query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
-		query_stream << (i < users.size()-1 ? "," : ";");
-		i++;
-	}
-
-	query_stream << "COMMIT;";
+    if(users.size() > 0) {
+        query_stream << "BEGIN;";
+        query_stream << "INSERT INTO Users VALUES ";
+        short int i = 0;
+        for(const user_t &user : users) {
+            assert(user.role == 1 || user.role == 2);
+            query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
+            query_stream << (i < users.size()-1 ? "," : ";");
+            i++;
+        }
+        query_stream << "COMMIT;";
+    }
 
 	// FIXME: performs full copy
 	auto query = query_stream.str();
@@ -1308,7 +1245,7 @@ void init_db(sqlite3 *db, const user_vector_t &users) {
 
 	sqlite3_finalize(stmt);
 
-//	DEBUG("Master user changed(uid: " << uid << ")");
+	DEBUG("Database initialized)");
 }
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
@@ -1324,30 +1261,16 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		throw std::logic_error("AES misconfiguration, expected AES-128");
 	}
 
+    if(filename.empty()) DEBUG("Opening temporary in-memory keyfile");
 	if(sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK) {
 		sqlite3_close(bindy_state_->sql_conn);
 		throw std::runtime_error("cannot open sqlite");
 	}
-
-//	sqlite3 *converter_conn;
-//	if (sqlite3_open_v2("/home/vlad/RIP/Bindy/converted_keyfile.sqlite", &(converter_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
-//		sqlite3_close(bindy_state_->sql_conn); throw std::runtime_error("cannot open sqlite");
-//	}
-//	init_db(converter_conn, extract_from_old_config("/home/vlad/RIP/Bindy/sample_keyfile.bin"));
-
-//	sqlite3 *test_sql_conn;
-//	if (sqlite3_open_v2("/home/vlad/RIP/Bindy/test.sqlite", &(test_sql_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
-//		sqlite3_close(bindy_state_->sql_conn); throw std::runtime_error("cannot open sqlite");
-//	}
-//	user_vector_t test_users{user_t{uuid_t4(), "omgwtfuser", bindy::aes_key_t{"5aqq4qqqqqqqqq\0"}}};
-//	init_db(test_sql_conn, test_users);
-//	import_user("/home/vlad/RIP/Bindy/test.sqlite");
-
-//	try {
-//		read_sqlite_config(filename, bindy_state_);
-//	} catch (wrong_config_format &err) {
-//		read_binary_config(filename, bindy_state_);
-//	}
+	try {
+		init_db(bindy_state_->sql_conn);
+	} catch (std::runtime_error &e) {
+		// skip
+	}
 };
 
 Bindy::~Bindy() {
@@ -1365,8 +1288,12 @@ Bindy::~Bindy() {
 	delete bindy_state_;
 };
 
-
 user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key) {
+    user_id_t uid = uuid_to_uid(sole::uuid1());
+    return add_user_local(username, key, uid);
+}
+
+user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid) {
 	if(username.length() > USERNAME_LENGTH)
 		throw std::runtime_error("name too long");
 
@@ -1381,8 +1308,6 @@ user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &ke
 		sqlite3_finalize(stmt);
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
-
-	user_id_t uid = uuid_to_uid(sole::uuid1());
 
 	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
 	sqlite3_bind_text(stmt, 2, username.data(), static_cast<int>(username.size()), SQLITE_TRANSIENT);
@@ -1744,7 +1669,7 @@ std::future<void> Bindy::set_master_remote(const conn_id_t conn_id, const user_i
 	return completion->get_future();
 }
 
-void Bindy::import_user(const std::string path) {
+void Bindy::import_users_from_keyfile(const std::string path) {
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
@@ -1780,7 +1705,7 @@ void Bindy::import_user(const std::string path) {
 	} while(left[0] != '\0');
 }
 
-void Bindy::export_user(const user_id_t& uid, const std::string path) {
+void Bindy::export_user_to_keyfile(const user_id_t& uid, const std::string path) {
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 

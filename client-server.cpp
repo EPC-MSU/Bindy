@@ -1,4 +1,4 @@
-#include "bindy.h"
+#include "bindy-static.h"
 
 void handler_function(bindy::conn_id_t conn_id, std::vector<uint8_t> data) {
 	std::string text(data.begin(), data.end());
@@ -20,7 +20,7 @@ int main (int argc, char *argv[])
 		try {
 			bindy.reset(new bindy::Bindy(argv[1], false, false));
 		} catch (...) {
-			fail("Error initializing Bindy. Please check if configuration file exists.");
+			fail("Error initializing bindy. Please check if configuration file exists.");
 		}
 		std::cout << "CLIENT started." << std::endl;
 		bindy::conn_id_t conn_id;
@@ -29,39 +29,21 @@ int main (int argc, char *argv[])
 		} catch (...) {
 			fail("Error establishing connection to remote address.");
 		}
-//		try {
+		try {
 			// Send user message
 			std::string text = std::string(argv[3]);
 			std::vector<uint8_t> data = std::vector<uint8_t>(text.begin(), text.end());
 			bindy->send_data(conn_id, data);
 
-			// Send service messages
-			auto uid_f = bindy->add_user_remote(conn_id, "test-user-04", bindy::aes_key_t{"xxxxxxxxxxxxxx\0"});
-			uid_f.wait();
-			auto uid = uid_f.get();
-
-			bindy->set_master_remote(conn_id, uid).wait();
-			bindy->change_key_remote(conn_id, uid, bindy::aes_key_t{"vvvvvvvvvvvvvv\0"}).wait();
-
-			auto users_f = bindy->list_users_remote(conn_id);
-			users_f.wait();
-			auto users = users_f.get();
-
-			bindy->export_user(uid, "/home/vlad/RIP/Bindy/tinytest.sqlite");
-
-			bindy->del_user_remote(conn_id, uid).wait();
-
-			bindy->import_user("/home/vlad/RIP/Bindy/tinytest.sqlite");
-
 			bindy::sleep_ms(1000); // let the server process the data
-//		} catch (...) {
-//			fail("Error sending data.");
-//		}
+		} catch (...) {
+			fail("Error sending data.");
+		}
 	} else if (argc == 2) { // I am a Server
 		try {
 			bindy.reset(new bindy::Bindy(argv[1], true, true));
 		} catch (...) {
-			fail("Error initializing Bindy. Please check if configuration file exists.");
+			fail("Error initializing bindy. Please check if configuration file exists.");
 		}
 		try {
 			bindy->connect();

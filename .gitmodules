@@ -1,3 +1,6 @@
 [submodule "vendor/sole"]
 	path = vendor/sole
 	url = https://github.com/r-lyeh/sole.git
+[submodule "vendor/cryptopp"]
+	path = vendor/cryptopp
+	url = https://github.com/EPC-MSU/cryptopp

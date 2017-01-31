@@ -1,96 +1,91 @@
 cmake_minimum_required(VERSION 2.8)
 
-
 project(bindy)
 
-if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
-	# It is required to build a rpath framework
-	cmake_policy(SET CMP0042 NEW)
-endif()
-if(NO_RPATH_PACKAGING)
-	set(CMAKE_SKIP_RPATH TRUE)
-endif()
+if (${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
+    # It is required to build a rpath framework
+    cmake_policy(SET CMP0042 NEW)
+endif ()
 
 # Detect correct C++11 flag
-if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
-include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-if(COMPILER_SUPPORTS_CXX11)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-elseif(COMPILER_SUPPORTS_CXX0X)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-else()
-	message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
-endif()
-endif()
+if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
+    include(CheckCXXCompilerFlag)
+    CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+    CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+    if (COMPILER_SUPPORTS_CXX11)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+    elseif (COMPILER_SUPPORTS_CXX0X)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+    else ()
+        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+    endif ()
+endif ()
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL Windows AND ${CMAKE_SYSTEM_VERSION} EQUAL 6.1)
+    # HACK: Make cryptopp replace missing (till Windows 8) GetOverlappedResultEx() on Windows7 with somehting compatible
+    add_definitions(-D_WIN32_WINNT=0x0601)
+endif ()
+
+include_directories(vendor)
+
+option(BINDY_BUILD_SHARED "Build bindy as shared library" ON)
+option(BINDY_BUILD_STATIC "Build bindy as static library" OFF)
+option(BINDY_BUILD_EXMAPLE "Build exmaple client/server application" OFF)
 
 # Configure sqlite
 add_definitions(-DSQLITE_ENABLE_COLUMN_METADATA)
 
-# Find crypto++ library. Hinted path is CRYPTOPP_PATH
-option(BINDY_CRYPTOPP_SHARED "build with libcryptopp as shared library which can be found by ld" OFF)
-if(BINDY_CRYPTOPP_SHARED)
-	set(CRYPTOPP_NAMES cryptopp)
-else()
-    set(CRYPTOPP_NAMES libcryptopp.a cryptlib.lib)
-endif()
+# Configure cryptopp
+option(BUILD_STATIC "" ON)
+option(BUILD_SHARED "" OFF)
+option(BUILD_TESTING "" OFF)
+option(BUILD_DOCUMENTATION "" OFF)
+add_subdirectory(vendor/cryptopp)
 
-find_path(CRYPTOPP_INCLUDE_DIR aes.h
-	PATH_SUFFIXES cryptopp
-	PATHS
-	/usr/local/include/
-	/usr/include/
-	${CRYPTOPP_PATH}/include/
-	${CRYPTOPP_PATH}/
-	${CRYPTOPP_PATH_INCLUDE}
-	)
+set(SOURCES
+        bindy.cpp
+        tinythread.cpp
+        vendor/sole/sole.cpp
+        vendor/sqlite/sqlite3.c
+        )
 
-find_library(CRYPTOPP_LIBRARY
-	NAMES ${CRYPTOPP_NAMES}
-	PATH_SUFFIXES lib64 lib
-	PATHS
-	/usr/local
-	/usr
-	${CRYPTOPP_PATH}/lib
-	${CRYPTOPP_PATH}/
-	)
+if (BINDY_BUILD_SHARED)
+    add_library(bindy SHARED ${SOURCES})
+    target_link_libraries(bindy cryptopp-static)
+    set_target_properties(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
+endif ()
 
-if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
-endif()
-if(${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -pthread")
-endif()
-if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-endif()
+if (BINDY_BUILD_STATIC OR BINDY_BUILD_EXMAPLE)
+    add_library(bindy-static STATIC ${SOURCES})
+    target_link_libraries(bindy-static cryptopp-static)
+endif ()
 
-# creates variables CRYPTOPP_FOUND, CRYPTOPP_LIBRARY and CRYPTOPP_INCLUDE_DIR
-include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(CRYPTOPP DEFAULT_MSG CRYPTOPP_INCLUDE_DIR CRYPTOPP_LIBRARY)
-mark_as_advanced(CRYPTOPP_INCLUDE_DIR CRYPTOPP_LIBRARY)
 
-if(NOT CRYPTOPP_FOUND)
-	message(FATAL_ERROR "Please set CRYPTOPP_PATH and/or CRYPTOPP_PATH_INCLUDE for custom crypto++ location")
-endif()
+if (${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
+    # librt is not static part of glibc in many Linux distros
+    if (BINDY_BUILD_SHARED)
+        target_link_libraries(bindy rt pthread)
+    endif ()
 
-include_directories(${CRYPTOPP_INCLUDE_DIR})
-include_directories("vendor")
+    if (BINDY_BUILD_STATIC)
+        target_link_libraries(bindy-static rt pthread)
+    endif ()
+endif ()
+if (${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD OR ${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+endif ()
 
-add_library(bindy SHARED bindy.cpp tinythread.cpp vendor/sole/sole.cpp vendor/sqlite/sqlite3.c)
-target_link_libraries(bindy ${CRYPTOPP_LIBRARY})
-if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
-    # librt is used by sole on some platforms
-    target_link_libraries(bindy rt)
-endif()
-if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
-	target_link_libraries(bindy ws2_32)
-endif()
-
-add_executable(bindy-main client-server.cpp)
-target_link_libraries(bindy-main bindy)
-if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
-    # When both CXX and C used, compilation fails without -ldl flag on Linux systems
-    target_link_libraries(bindy-main dl)
-endif()
+if (BINDY_BUILD_EXMAPLE)
+    add_executable(bindy-main client-server.cpp)
+    if (BINDY_BUILD_SHARED)
+        target_link_libraries(bindy-main bindy)
+    elseif (BINDY_BUILD_STATIC)
+        target_link_libraries(bindy-main bindy-static)
+    else ()
+        message(FATAL_ERROR "You can't build example without building the library!")
+    endif ()
+    if (${CMAKE_SYSTEM_NAME} STREQUAL Linux)
+        # When both CXX and C used, compilation fails without -ldl flag on Linux systems
+        target_link_libraries(bindy-main dl)
+    endif ()
+endif ()

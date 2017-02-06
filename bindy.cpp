@@ -589,8 +589,9 @@ int Connection::buffer_read(uint8_t *p, int size) {
 }
 
 void Connection::buffer_write(std::vector<uint8_t> data) {
-	for(unsigned int i = 0; i < data.size(); i++)
-		buffer->push_back(data.at(i));
+	for(unsigned int i = 0; i < data.size(); i++) {
+        buffer->push_back(data[i]);
+    }
 }
 
 void Connection::callback_data(std::vector<uint8_t> data) {
@@ -630,11 +631,6 @@ user_vector_t extract_from_old_config(std::string filename) {
     is.close();
 
     return std::move(users);
-}
-
-user_t get_old_master() {
-    auto users = extract_from_old_config("/tmp/bindy/sample_keyfile.bin");
-    return users[0];
 }
 
 void Connection::initial_exchange(bcast_data_t bcast_data) {
@@ -699,10 +695,6 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 
 		// Authorize ourselves here
 		user_t master = bindy->get_master();
-//        user_t master = get_old_master();
-//        bool error = (
-//            memcmp(master.uid.bytes, new_master.uid.bytes, AES_KEY_LENGTH)
-//        );
 
 		send_key->Assign(master.key.bytes, AES_KEY_LENGTH);
 		recv_key->Assign(master.key.bytes, AES_KEY_LENGTH);
@@ -1155,7 +1147,7 @@ aes_key_t Bindy::key_by_uid(const user_id_t& uid) {
 		sqlite3_finalize(stmt); throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	auto test = sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
+	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
 
 	// mapping <Table name>.<Column name> to numerical index
 	std::map<std::string, int> index;
@@ -1984,9 +1976,5 @@ void Bindy::initialize_network() {
 void Bindy::shutdown_network() {
 	CryptoPP::Socket::ShutdownSockets();
 }
-
-//bool user_id_t::operator==(const user_id_t &other) const {
-//	return std::memcmp(this->bytes, other.bytes, AUTH_DATA_LENGTH) == 0;
-//}
 
 }; // namespace bindy

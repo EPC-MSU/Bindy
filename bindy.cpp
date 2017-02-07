@@ -1883,6 +1883,7 @@ user_t Bindy::get_master() {
 	}
 
 	user_t user;
+    memset(&user, 0, sizeof(user));
 
 	int cr = sqlite3_step(stmt);
 	if(cr == SQLITE_ROW) {

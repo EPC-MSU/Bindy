@@ -229,7 +229,7 @@ std::map<conn_id_t, unsigned int> Countable::map_prev;
 std::map<conn_id_t, tthread::mutex *> Countable::mutexes;
 tthread::mutex Countable::global_mutex;
 
-int conn_id = conn_id_invalid; // used in tcp- and udp-listen thread functions
+int listen_conn_id = conn_id_invalid; // used in tcp- and udp-listen thread functions
 
 bool set_socket_broadcast(Socket *s) {
 	bool ok = true;
@@ -1054,8 +1054,8 @@ void main_thread_function(void *arg) {
 			conn_id_t local_conn_id;
 			{
 				tlock lock(bindy->bindy_state_->interlock_mutex);
-				local_conn_id = conn_id;
-				conn_id++;
+				local_conn_id = listen_conn_id;
+				listen_conn_id++;
 			}
 
 			try {
@@ -1113,8 +1113,8 @@ void broadcast_thread_function(void *arg) {
 			conn_id_t local_conn_id;
 			{
 				tlock lock(bindy->bindy_state_->interlock_mutex);
-				local_conn_id = conn_id;
-				conn_id++;
+				local_conn_id = listen_conn_id;
+				listen_conn_id++;
 			}
 
 			try {
@@ -1776,6 +1776,7 @@ void Bindy::connect() {
 }
 
 conn_id_t Bindy::connect(std::string addr) {
+	int conn_id = conn_id_invalid;
 	Socket *sock = nullptr;
 	SuperConnection *sc = nullptr;
 	if(addr.empty()) { // use broadcast to connect somewhere

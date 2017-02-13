@@ -1245,6 +1245,17 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
 	port_(49150), is_server_(is_server), is_buffered_(is_buffered) {
+	try {
+		std::random_device rd; // may throw if random device is not available
+		if (rd.entropy() == 0) {
+			throw std::exception();
+		}
+		srand(rd());
+	}
+	catch (std::exception)
+	{
+		srand(time(0));
+	}
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = nullptr;
 	bindy_state_->m_discnotify = nullptr;

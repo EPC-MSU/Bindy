@@ -21,17 +21,17 @@
 #endif
 
 
-#if defined(BINDY_IMPORTS)
+#if defined(BINDY_EXPORTS)
+	#if defined (WIN32) || defined(WIN64)
+        #define BINDY_EXPORT __declspec(dllexport)
+    #else
+        #define BINDY_EXPORT __attribute__((visibility("default")))
+    #endif
+#elif defined(BINDY_IMPORTS)
     #if defined (WIN32) || defined(WIN64)
         #define BINDY_EXPORT __declspec(dllimport)
     #else
         #define BINDY_EXPORT
-    #endif
-#elif defined(BINDY_EXPORTS)
-    #if defined (WIN32) || defined(WIN64)
-        #define BINDY_EXPORT __declspec(dllexport)
-    #else
-        #define BINDY_EXPORT __attribute__((visibility("default")))
     #endif
 #else
     #define BINDY_EXPORT

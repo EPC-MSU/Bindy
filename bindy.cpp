@@ -437,7 +437,7 @@ void Connection::send_packet_ack(const link_pkt type, std::vector<uint8_t> &cont
 	std::memcpy(content.data() + orig_size, &request_id, sizeof(ack_id_t));
 
 	ack_mutex->lock();
-	ack_callbacks->emplace(
+	ack_callbacks->insert(
 			std::make_pair(request_id, std::make_pair(success, failure))
 	);
 	ack_mutex->unlock();
@@ -1184,7 +1184,7 @@ user_id_t uuid_to_uid(sole::uuid&& uuid) {
 	return uid;
 }
 
-void init_db(sqlite3 *db, const user_vector_t &users={}) {
+void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 	sqlite3_stmt *stmt;
 	std::stringstream query_stream;
 
@@ -1884,7 +1884,8 @@ user_t Bindy::get_master() {
 	}
 
 	user_t user;
-    memset(&user, 0, sizeof(user));
+    // in case that uid is not actual uuid but shorter legacy username
+    memset(&user.uid, 0, sizeof(uid_t));
 
 	int cr = sqlite3_step(stmt);
 	if(cr == SQLITE_ROW) {

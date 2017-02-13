@@ -36,26 +36,30 @@ option(BINDY_BUILD_EXMAPLE "Build exmaple client/server application" OFF)
 add_definitions(-DSQLITE_ENABLE_COLUMN_METADATA)
 
 # Configure cryptopp
-option(BUILD_STATIC "" OFF)
+option(BUILD_STATIC "" ON)
 option(BUILD_SHARED "" OFF)
 option(BUILD_TESTING "" OFF)
 option(BUILD_DOCUMENTATION "" OFF)
 add_subdirectory(vendor/cryptopp)
+set_property(TARGET cryptopp-static PROPERTY POSITION_INDEPENDENT_CODE ON)
+
 
 set(SOURCES
         bindy.cpp
         tinythread.cpp
         vendor/sole/sole.cpp
         vendor/sqlite/sqlite3.c
-        $<TARGET_OBJECTS:cryptopp-object>
         )
 
 if (BINDY_BUILD_SHARED)
     add_library(bindy SHARED ${SOURCES})
+    set_target_properties(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
+    target_link_libraries(bindy cryptopp-static)
 endif ()
 
 if (BINDY_BUILD_STATIC OR BINDY_BUILD_EXMAPLE)
     add_library(bindy-static STATIC ${SOURCES})
+    target_link_libraries(bindy-static cryptopp-static)
 endif ()
 
 

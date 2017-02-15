@@ -1896,7 +1896,7 @@ user_t Bindy::get_master() {
 
 	user_t user;
     // in case that uid is not actual uuid but shorter legacy username
-    memset(&user.uid, 0, sizeof(uid_t));
+    memset(&user.uid, 0, sizeof(user.uid));
 
 	int cr = sqlite3_step(stmt);
 	if(cr == SQLITE_ROW) {

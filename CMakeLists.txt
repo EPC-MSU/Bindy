@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 2.8.9)
 
 project(bindy)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Detect correct C++11 flag
 if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
     include(CheckCXXCompilerFlag)
@@ -40,7 +42,7 @@ option(BUILD_SHARED "" OFF)
 option(BUILD_TESTING "" OFF)
 option(BUILD_DOCUMENTATION "" OFF)
 add_subdirectory(vendor/cryptopp)
-set_property(TARGET cryptopp-static PROPERTY POSITION_INDEPENDENT_CODE ON)
+#set_property(TARGET cryptopp-object PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 
 set(SOURCES

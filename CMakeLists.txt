@@ -1,13 +1,6 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 2.8.8)
 
 project(bindy)
-
-if (${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
-    # It is required to build a rpath framework
-    cmake_policy(SET CMP0042 NEW)
-endif ()
-cmake_policy(SET CMP0022 NEW)
-cmake_policy(SET CMP0023 NEW)
 
 # Detect correct C++11 flag
 if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
@@ -28,6 +21,10 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL Windows AND ${CMAKE_SYSTEM_VERSION} EQUAL 6.1)
     add_definitions(-D_WIN32_WINNT=0x0601)
 endif ()
 
+if (${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD OR ${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+endif ()
+
 include_directories(vendor)
 
 option(BINDY_BUILD_SHARED "Build bindy as shared library" ON)
@@ -42,6 +39,8 @@ option(BUILD_STATIC "" ON)
 option(BUILD_SHARED "" OFF)
 option(BUILD_TESTING "" OFF)
 option(BUILD_DOCUMENTATION "" OFF)
+# Workadround for "shlib-with-non-pic-code" linter error on linux x86 due to ASM code
+option(DISABLE_ASM "" ON)
 add_subdirectory(vendor/cryptopp)
 set_property(TARGET cryptopp-static PROPERTY POSITION_INDEPENDENT_CODE ON)
 
@@ -56,40 +55,37 @@ set(SOURCES
 if (BINDY_BUILD_SHARED)
     add_library(bindy SHARED ${SOURCES})
     set_target_properties(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
-    target_link_libraries(bindy PRIVATE cryptopp-static)
+    target_link_libraries(bindy LINK_PRIVATE cryptopp-static)
 endif ()
 
 if (BINDY_BUILD_STATIC OR BINDY_BUILD_EXMAPLE)
     add_library(bindy-static STATIC ${SOURCES})
-    target_link_libraries(bindy-static PRIVATE cryptopp-static)
+    target_link_libraries(bindy-static LINK_PRIVATE cryptopp-static)
 endif ()
 
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
     # librt is not static part of glibc in many Linux distros
     if (BINDY_BUILD_SHARED)
-        target_link_libraries(bindy PRIVATE rt pthread)
+        target_link_libraries(bindy LINK_PRIVATE rt pthread)
     endif ()
 
     if (BINDY_BUILD_STATIC)
-        target_link_libraries(bindy-static PRIVATE rt pthread)
+        target_link_libraries(bindy-static LINK_PRIVATE rt pthread)
     endif ()
-endif ()
-if (${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD OR ${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif ()
 
 if (BINDY_BUILD_EXAMPLE)
     add_executable(bindy-main client-server.cpp)
     if (BINDY_BUILD_SHARED)
-        target_link_libraries(bindy-main PRIVATE bindy)
+        target_link_libraries(bindy-main LINK_PRIVATE bindy)
     elseif (BINDY_BUILD_STATIC)
-        target_link_libraries(bindy-main PRIVATE bindy-static)
+        target_link_libraries(bindy-main LINK_PRIVATE bindy-static)
     else ()
         message(FATAL_ERROR "You can't build example without building the library!")
     endif ()
     if (${CMAKE_SYSTEM_NAME} STREQUAL Linux)
         # When both CXX and C used, compilation fails without -ldl flag on Linux systems
-        target_link_libraries(bindy-main PRIVATE dl)
+        target_link_libraries(bindy-main LINK_PRIVATE dl)
     endif ()
 endif ()

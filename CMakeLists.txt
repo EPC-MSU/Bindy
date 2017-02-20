@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.8)
+cmake_minimum_required(VERSION 2.8.9)
 
 project(bindy)
 
@@ -39,8 +39,6 @@ option(BUILD_STATIC "" ON)
 option(BUILD_SHARED "" OFF)
 option(BUILD_TESTING "" OFF)
 option(BUILD_DOCUMENTATION "" OFF)
-# Workadround for "shlib-with-non-pic-code" linter error on linux x86 due to ASM code
-option(DISABLE_ASM "" ON)
 add_subdirectory(vendor/cryptopp)
 set_property(TARGET cryptopp-static PROPERTY POSITION_INDEPENDENT_CODE ON)
 
@@ -56,6 +54,7 @@ if (BINDY_BUILD_SHARED)
     add_library(bindy SHARED ${SOURCES})
     set_target_properties(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
     target_link_libraries(bindy LINK_PRIVATE cryptopp-static)
+    set_property(TARGET bindy PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif ()
 
 if (BINDY_BUILD_STATIC OR BINDY_BUILD_EXMAPLE)

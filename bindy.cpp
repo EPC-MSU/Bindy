@@ -16,6 +16,7 @@
 #include <secblock.h>
 #include <socketft.h>
 #include <aes.h>
+#include <assert.h>
 
 #include "tinythread.h"
 

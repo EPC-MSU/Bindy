@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 2.8.9)
 
-project(bindy)
+project(bindy CXX)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
+    # It is required to build a rpath framework
+    cmake_policy(SET CMP0042 NEW)
+endif()
 
 # Detect correct C++11 flag
 if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)

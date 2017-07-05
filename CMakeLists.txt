@@ -1,95 +1,80 @@
-cmake_minimum_required(VERSION 2.8.9)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.9)
 
-project(bindy CXX)
+PROJECT(bindy)
 
-if(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
+OPTION(BUILD_SHARED_LIBS "Build shared libraries" ON)
+OPTION(BUILD_EXAMPLE "Build exmaple client/server application" OFF)
+
+IF(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
     # It is required to build a rpath framework
-    cmake_policy(SET CMP0042 NEW)
-endif()
+    CMAKE_POLICY(SET CMP0042 NEW)
+ENDIF()
 
 # Detect correct C++11 flag
-if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
-    include(CheckCXXCompilerFlag)
+IF(NOT ${CMAKE_SYSTEM_NAME} STREQUAL Windows)
+    INCLUDE(CheckCXXCompilerFlag)
     CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
     CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-    if (COMPILER_SUPPORTS_CXX11)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-    elseif (COMPILER_SUPPORTS_CXX0X)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-    else ()
-        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
-    endif ()
-endif ()
+    IF(COMPILER_SUPPORTS_CXX11)
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+    ELSEIF(COMPILER_SUPPORTS_CXX0X)
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+    ELSE()
+        MESSAGE(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+    ENDIF()
+ENDIF()
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL Windows AND ${CMAKE_SYSTEM_VERSION} EQUAL 6.1)
+IF(${CMAKE_SYSTEM_NAME} STREQUAL Windows AND ${CMAKE_SYSTEM_VERSION} EQUAL 6.1)
     # HACK: Make cryptopp replace missing (till Windows 8) GetOverlappedResultEx() on Windows7 with somehting compatible
-    add_definitions(-D_WIN32_WINNT=0x0601)
-endif ()
+    ADD_DEFINITIONS(-D_WIN32_WINNT=0x0601)
+ENDIF()
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD OR ${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-endif ()
-
-include_directories(vendor)
-
-option(BINDY_BUILD_SHARED "Build bindy as shared library" ON)
-option(BINDY_BUILD_STATIC "Build bindy as static library" OFF)
-option(BINDY_BUILD_EXAMPLE "Build exmaple client/server application" OFF)
+IF(${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD OR ${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+ENDIF()
 
 # Configure sqlite
-add_definitions(-DSQLITE_ENABLE_COLUMN_METADATA)
+ADD_DEFINITIONS(-DSQLITE_ENABLE_COLUMN_METADATA)
 
-# Configure cryptopp
-option(BUILD_STATIC "" ON)
-option(BUILD_SHARED "" OFF)
-option(BUILD_TESTING "" OFF)
-option(BUILD_DOCUMENTATION "" OFF)
-add_subdirectory(vendor/cryptopp)
-#set_property(TARGET cryptopp-object PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-
-set(SOURCES
+SET(SOURCES
         bindy.cpp
         tinythread.cpp
         vendor/sole/sole.cpp
         vendor/sqlite/sqlite3.c
         )
 
-if (BINDY_BUILD_SHARED)
-    add_library(bindy SHARED ${SOURCES})
-    set_target_properties(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
-    target_link_libraries(bindy LINK_PRIVATE cryptopp-static)
-    set_property(TARGET bindy PROPERTY POSITION_INDEPENDENT_CODE ON)
-endif ()
+INCLUDE_DIRECTORIES(vendor)
+ADD_LIBRARY(bindy ${SOURCES})
+IF(BUILD_SHARED_LIBS)
+    SET_TARGET_PROPERTIES(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
+ENDIF()
 
-if (BINDY_BUILD_STATIC OR BINDY_BUILD_EXMAPLE)
-    add_library(bindy-static STATIC ${SOURCES})
-    target_link_libraries(bindy-static LINK_PRIVATE cryptopp-static)
-endif ()
+FUNCTION(CONFIGURE_CRYPTOPP)
+    # Unconditionally configure cryptopp in separate scope
+    SET(BUILD_STATIC ON CACHE INTERNAL "")
+    SET(BUILD_SHARED OFF CACHE INTERNAL "")
+    SET(BUILD_TESTING OFF CACHE INTERNAL "")
+    SET(BUILD_DOCUMENTATION OFF CACHE INTERNAL "")
+    SET(DISABLE_ASM OFF CACHE INTERNAL "")
+    SET(DISABLE_SSSE3 OFF CACHE INTERNAL "")
+    SET(DISABLE_AESNI OFF CACHE INTERNAL "")
+    SET(CRYPTOPP_DATA_DIR CACHE INTERNAL "")
+    ADD_SUBDIRECTORY(vendor/cryptopp)
+ENDFUNCTION()
 
+CONFIGURE_CRYPTOPP()
+TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static)
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
+IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
     # librt is not static part of glibc in many Linux distros
-    if (BINDY_BUILD_SHARED)
-        target_link_libraries(bindy LINK_PRIVATE rt pthread)
-    endif ()
+    TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE rt pthread)
+ENDIF()
 
-    if (BINDY_BUILD_STATIC)
-        target_link_libraries(bindy-static LINK_PRIVATE rt pthread)
-    endif ()
-endif ()
-
-if (BINDY_BUILD_EXAMPLE)
-    add_executable(bindy-main client-server.cpp)
-    if (BINDY_BUILD_SHARED)
-        target_link_libraries(bindy-main LINK_PRIVATE bindy)
-    elseif (BINDY_BUILD_STATIC)
-        target_link_libraries(bindy-main LINK_PRIVATE bindy-static)
-    else ()
-        message(FATAL_ERROR "You can't build example without building the library!")
-    endif ()
-    if (${CMAKE_SYSTEM_NAME} STREQUAL Linux)
+IF(BUILD_EXAMPLE)
+    ADD_EXECUTABLE(bindy-main client-server.cpp)
+    TARGET_LINK_LIBRARIES(bindy-main LINK_PRIVATE bindy)
+    IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
         # When both CXX and C used, compilation fails without -ldl flag on Linux systems
-        target_link_libraries(bindy-main LINK_PRIVATE dl)
-    endif ()
-endif ()
+        TARGET_LINK_LIBRARIES(bindy-main LINK_PRIVATE dl)
+    ENDIF()
+ENDIF()

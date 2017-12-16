@@ -236,6 +236,9 @@ bool set_socket_broadcast(Socket *s) {
 #ifdef __linux__
 	int optval = 1;
 	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)));
+#elif defined(__APPLE__)
+	int optval = 1;
+	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)));
 #endif
 	return ok;
 }
@@ -245,6 +248,14 @@ bool set_socket_reuseaddr(Socket *s) {
 #ifdef __linux__
 	int optval = 1;
 	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)));
+#elif defined(__APPLE__)
+	int optval = 1;
+	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)));
+	if (ok)
+	{
+		optval = 1;
+		ok = (0 == setsockopt(*s, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)));
+	}
 #endif
 	return ok;
 }
@@ -1011,10 +1022,13 @@ ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
 	int keepalive_cnt = KEEPCNT;
 
 	ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
-	// TODO non-portable line of code
-#ifdef __linux__
+	// platform-specific code here
+#if defined(__linux__)
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)));
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_idle, sizeof(int)));
+	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
+#elif defined(__APPLE__)
+	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)));
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
 #endif
 

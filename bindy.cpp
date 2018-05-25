@@ -7,6 +7,7 @@
 
 
 #include "bindy-static.h"
+#include "bindy-config.h"
 
 #include <fstream>
 #include <cstring>
@@ -1026,12 +1027,13 @@ ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
 
 	ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
 	// platform-specific code here
-#if defined(__linux__)
+#ifdef HAVE_TCP_KEEPINTVL
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)));
+#endif
+#ifdef HAVE_TCP_KEEPIDLE
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_idle, sizeof(int)));
-	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
-#elif defined(__APPLE__)
-	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)));
+#endif
+#ifdef HAVE_TCP_KEEPCNT
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
 #endif
 

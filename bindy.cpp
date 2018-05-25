@@ -239,6 +239,9 @@ bool set_socket_broadcast(Socket *s) {
 #elif defined(__APPLE__)
 	int optval = 1;
 	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)));
+#elif defined(_WIN32)
+	char optval = 1;
+	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)));
 #endif
 	return ok;
 }

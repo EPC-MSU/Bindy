@@ -175,9 +175,10 @@ public:
 	/*!
 	*	Client method; each call to this function opens new socket to the host and establishes its own encrypted channel.
 	*	@param[in] addr The IPv4 address or hostname to connect to.
+	*	@param[in] adapter_addr The IPv4 address of network adapter to bind to.
 	*	\return The handle to the created connection. Equals "conn_id_invalid" in case connection could not be established.
 	*/
-	conn_id_t connect (std::string addr);
+	conn_id_t connect (std::string addr, std::string adapter_addr = "");
 
 	/*!
 	*	Disconnects the channel identified by connection uid.
@@ -204,6 +205,12 @@ public:
 	*	\return Port number.
 	*/
 	int port();
+
+	/*!
+	*	Returns the network adapter address which is used by Bindy to listen for connections.
+	*	\return Adapter address.
+	*/
+	std::string adapter_addr();
 
 	/*!
 	*	Returns the list of active connections.
@@ -258,6 +265,7 @@ private:
 	const int port_;
 	const bool is_server_;
 	const bool is_buffered_;
+	std::string adapter_addr_;
 
 	/*!
 	* Main thread of the Bindy class. Listens on an opened socket, accepts connections and spawns socket threads.

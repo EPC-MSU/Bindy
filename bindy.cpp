@@ -112,6 +112,7 @@ typedef tthread::lock_guard<tthread::mutex> tlock;
 typedef struct bcast_data_t {
 	std::vector<uint8_t> data;
 	std::string addr;
+	std::string adapter_addr;
 } bcast_data_t;
 
 /*! This function takes a pointer to an array of chars and its size and returns its representation in hex as a string. */
@@ -727,7 +728,8 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 			Socket listen_sock;
 			listen_sock.Create(SOCK_STREAM);
 			set_socket_reuseaddr(&listen_sock);
-			listen_sock.Bind(bindy->port_, NULL);
+			const char *adapter_addr = (bcast_data.adapter_addr.empty() ? NULL : bcast_data.adapter_addr.c_str());
+			listen_sock.Bind(bindy->port_, adapter_addr);
 			listen_sock.Listen();
 
 			// send a broadcast itself
@@ -1052,7 +1054,8 @@ void main_thread_function(void *arg) {
 		DEBUG("Creating TCP listen socket...");
 		listen_sock.Create(SOCK_STREAM);
 		set_socket_reuseaddr(&listen_sock);
-		listen_sock.Bind(bindy->port(), NULL);
+		const char* adapter_addr = (bindy->adapter_addr().empty() ? NULL : bindy->adapter_addr().c_str());
+		listen_sock.Bind(bindy->port(), adapter_addr);
 	} catch(std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 		throw e;
@@ -1103,7 +1106,8 @@ void broadcast_thread_function(void *arg) {
 		DEBUG("Creating UDP listen socket...");
 		bcast_sock.Create(SOCK_DGRAM);
 		set_socket_broadcast(&bcast_sock);
-		bcast_sock.Bind(bindy->port(), NULL);
+		const char *adapter_addr = (bindy->adapter_addr().empty() ? NULL : bindy->adapter_addr().c_str());
+		bcast_sock.Bind(bindy->port(), adapter_addr);
 	} catch(std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 		throw e;
@@ -1263,7 +1267,7 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
-	port_(49150), is_server_(is_server), is_buffered_(is_buffered) {
+	port_(49150), is_server_(is_server), is_buffered_(is_buffered), adapter_addr_("") {
 	try {
 		std::random_device rd; // may throw if random device is not available
 		if (rd.entropy() == 0) {
@@ -1805,10 +1809,11 @@ void Bindy::connect() {
 	}
 }
 
-conn_id_t Bindy::connect(std::string addr) {
+conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
 	int conn_id = conn_id_invalid;
 	Socket *sock = nullptr;
 	SuperConnection *sc = nullptr;
+	adapter_addr_ = adapter_addr;
 	if(addr.empty()) { // use broadcast to connect somewhere
 		tlock lock(bindy_state_->mutex);
 		do {
@@ -1820,6 +1825,7 @@ conn_id_t Bindy::connect(std::string addr) {
 			bcast_data_t empty;
 			empty.addr = std::string();
 			empty.data = std::vector<uint8_t>();
+			empty.adapter_addr = adapter_addr;
 			sc = new SuperConnection(this, nullptr, conn_id, true, empty);
 			bindy_state_->connections[conn_id] = sc;
 		}
@@ -1951,6 +1957,10 @@ bool Bindy::is_server() {
 
 int Bindy::port() {
 	return port_;
+}
+
+std::string Bindy::adapter_addr() {
+	return adapter_addr_;
 }
 
 void Bindy::add_connection(conn_id_t conn_id, SuperConnection *sconn) {

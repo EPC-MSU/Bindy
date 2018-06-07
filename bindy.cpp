@@ -736,6 +736,7 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 			Socket bcast_sock;
 			bcast_sock.Create(SOCK_DGRAM);
 			set_socket_broadcast(&bcast_sock);
+			bcast_sock.Bind(bindy->port_, adapter_addr);
 			std::string addr("255.255.255.255"); // todo check: does this properly route on lin & win?
 			if(!bcast_sock.Connect(addr.c_str(), bindy->port_)) {
 				throw std::runtime_error("Error establishing connection.");

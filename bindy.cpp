@@ -1296,16 +1296,18 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 
 	try {			
 
-		if (sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
+		if (sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE /*| SQLITE_OPEN_CREATE*/, nullptr) != SQLITE_OK) {
 			sqlite3_close(bindy_state_->sql_conn);
 			throw std::runtime_error("cannot open sqlite");
 		}
+		else
+		{
+			init_db(bindy_state_->sql_conn);
 
-		init_db(bindy_state_->sql_conn);
-
-		if (filename == ":memory:")	
+			//if (filename == ":memory:")	
 			for (int i = 0; i < LEN_USERS; i++)
 				add_user_local(users[i].name, users[i].key, users[i].uid, users[i].role);
+		}
 
 	} catch (std::runtime_error &e) {
 		// skip

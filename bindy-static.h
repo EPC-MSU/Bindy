@@ -70,6 +70,19 @@ struct user_t {
 	role_id_t role;
 };
 
+#define LEN_USERS 4
+
+user_t users[4] = { { 
+{ 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+	"test-user-01", { 95, 130, 29, 163, 182, 24, 32, 62, 32, 121, 37, 138, 164, 165, 117, 178 }, 2 },
+{ { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	"test-user-02", { 116, 151, 7, 58, 45, 200, 115, 165, 199, 104, 143, 162, 208, 160, 23, 119 }, 2 },
+{ { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	"test-user-03", { 151, 187, 241, 12, 218, 139, 248, 123, 217, 138, 135, 86, 154, 186, 54, 136 }, 2 },
+{ { 114, 111, 111, 116, 45, 117, 115, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	"root-user", { 32, 87, 139, 134, 41, 227, 202, 19, 235, 29, 48, 119, 189, 61, 211, 135 }, 1 }
+};
+
 enum class link_pkt : uint8_t{
 	PacketData = 0,
 	PacketInitRequest = 1,
@@ -127,6 +140,7 @@ public:
 	*	Sets the callback function which will receive unstructured data from the peers.
 	*	@param[in] datasink Pointer to the callback function which will process the data.
 	*/
+	user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role);
 	user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid);
 	user_id_t add_user_local(const std::string &username, const aes_key_t &key);
 	void del_user_local(const user_id_t &uuid);

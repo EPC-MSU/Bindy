@@ -42,7 +42,6 @@ using CryptoPP::Socket;
 
 // ------------------------------------------------------------------------------------
 // Implementation
-using namespace std;
 
 namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
@@ -1212,15 +1211,12 @@ void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
 	sqlite3_stmt *stmt;
 	std::stringstream query_stream;
 
-	ofstream fout("init_db.txt"); // создаём объект класса ofstream для записи и связываем его с файлом cppstudio.txt
-	fout << "Start _0 \n"; // запись строки в файл
-
 	std::vector<std::string> static_statements{
 		"CREATE TABLE Users (uuid TEXT UNIQUE NOT NULL PRIMARY KEY, name TEXT NOT NULL, role INTEGER NOT NULL, key BLOB (16) NOT NULL UNIQUE);",
 		"CREATE TRIGGER SingleMasterInsert BEFORE INSERT ON Users FOR EACH ROW WHEN NEW.role = 1 BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;",
 		"CREATE TRIGGER SingleMasterUpdate BEFORE UPDATE OF role ON Users FOR EACH ROW WHEN NEW.role = 1  BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;",
 	};
-	fout << "Start _1 \n"; // запись строки в файл
+
 	for(std::string &s : static_statements) {
 		query_stream << s;
 	}
@@ -1234,11 +1230,9 @@ void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
             query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
             query_stream << (i < users.size()-1 ? "," : ";");
             i++;
-			fout << user.name << "Start _2 \n"; // запись строки в файл
         }
         query_stream << "COMMIT;";
     }
-	fout << "Start _3 \n"; // запись строки в файл
 	// FIXME: performs full copy
 	auto query = query_stream.str();
 	const char *left = query.data();
@@ -1266,8 +1260,6 @@ void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
 	} while(left[0] != '\0');
 
 	sqlite3_finalize(stmt);
-	fout << "End _4 \n"; // запись строки в файл
-	fout.close(); // закрываем файл
 	DEBUG("Database initialized)");
 }
 
@@ -1286,9 +1278,6 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		srand(time(0));
 	}
 
-	ofstream fout("bindy.txt"); // создаём объект класса ofstream для записи и связываем его с файлом cppstudio.txt
-	fout << "Start _0 \n"; // запись строки в файл
-	
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = nullptr;
 	bindy_state_->m_discnotify = nullptr;
@@ -1303,48 +1292,25 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	{
 		DEBUG("Opening temporary in-memory keyfile");
 		//filename = ":memory:";
-		//filename = "keyfile.sqlite1";
 	}
 
-	fout << "Beginning of the database _1 \n"; // запись строки в файл
-	try {
-		if (filename == ":memory:"/*"keyfile.sqlite1"*/) {
-			DEBUG("Opening temporary in-memory");
-			fout << ":memory: of the database _2 \n"; // запись строки в файл
-			std::string filename1 = "keyfile1.sqlite";
+	try {			
 
-			if (sqlite3_open(filename1.data(), &(bindy_state_->sql_conn)) != SQLITE_OK) {
-				sqlite3_close(bindy_state_->sql_conn);
-				fout << "cannot open sqlite database _2_1 \n"; // запись строки в файл
-				throw std::runtime_error("cannot open sqlite");
-			}
+		if (sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
+			sqlite3_close(bindy_state_->sql_conn);
+			throw std::runtime_error("cannot open sqlite");
+		}
 
-			init_db(bindy_state_->sql_conn);// , all_users);
-			//user_vector_t all_users;
-			for (int i = 0; i < LEN_USERS; i++){
+		init_db(bindy_state_->sql_conn);
+
+		if (filename == ":memory:")	
+			for (int i = 0; i < LEN_USERS; i++)
 				add_user_local(users[i].name, users[i].key, users[i].uid, users[i].role);
-				//all_users.push_back(std::move(users[i]));
-				fout << "sqlite database _2_2" << users[i].name << "\n"; // запись строки в файл
-			}
-			// throw std::runtime_error("Database sqlite create");
-		}
-		else {
-			DEBUG("Opening keyfile");
-			fout << "filename of the database _2 \n"; // запись строки в файл
-			if (sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE/* | SQLITE_OPEN_MEMORY*/, nullptr) != SQLITE_OK) {
-				sqlite3_close(bindy_state_->sql_conn);
-				throw std::runtime_error("cannot open sqlite");
-			}
-			init_db(bindy_state_->sql_conn);
-			// throw std::runtime_error("Database sqlite open");
-		}
+
 	} catch (std::runtime_error &e) {
-		// throw std::runtime_error("Database sqlite not open");
-		fout << "error of the database _2 \n"; // запись строки в файл
 		// skip
 	}
-	fout << "end of the database _3 \n"; // запись строки в файл
-	fout.close(); // закрываем файл
+
 };
 
 Bindy::~Bindy() {
@@ -1368,34 +1334,7 @@ user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &ke
 }
 
 user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid) {
-	if(username.length() > USERNAME_LENGTH)
-		throw std::runtime_error("name too long");
-
-	sqlite3 *db = bindy_state_->sql_conn;
-	sqlite3_stmt *stmt;
-
-	std::string query(
-		"INSERT INTO Users VALUES(?, ?, 2, ?);"
-	);
-
-	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		throw std::runtime_error(sqlite3_errmsg(db));
-	}
-
-	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
-	sqlite3_bind_text(stmt, 2, username.data(), static_cast<int>(username.size()), SQLITE_TRANSIENT);
-	sqlite3_bind_blob(stmt, 3, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
-
-	int cr = sqlite3_step(stmt);
-	sqlite3_finalize(stmt);
-
-	if(cr != SQLITE_DONE) {
-		throw std::runtime_error(sqlite3_errmsg(db));
-	}
-	DEBUG("User created(uid: " << uid.bytes << ")");
-
-	return uid;
+	return add_user_local(username, key, uid, 2);
 }
 
 user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role) {
@@ -1417,7 +1356,6 @@ user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &ke
 	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
 	sqlite3_bind_text(stmt, 2, username.data(), static_cast<int>(username.size()), SQLITE_TRANSIENT);
 	sqlite3_bind_int(stmt, 3, role);
-	//sqlite3_bind_blob(stmt, 3, &role, sizeof(role_id_t), SQLITE_TRANSIENT);
 	sqlite3_bind_blob(stmt, 4, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
 
 	int cr = sqlite3_step(stmt);

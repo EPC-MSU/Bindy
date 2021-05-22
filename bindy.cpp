@@ -44,6 +44,18 @@ using CryptoPP::Socket;
 // Implementation
 
 namespace bindy {
+
+static user_t predefined_users[4] = { {
+{ 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+	"test-user-01", { 95, 130, 29, 163, 182, 24, 32, 62, 32, 121, 37, 138, 164, 165, 117, 178 }, 2 },
+{ { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	"test-user-02", { 116, 151, 7, 58, 45, 200, 115, 165, 199, 104, 143, 162, 208, 160, 23, 119 }, 2 },
+{ { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	"test-user-03", { 151, 187, 241, 12, 218, 139, 248, 123, 217, 138, 135, 86, 154, 186, 54, 136 }, 2 },
+{ { 114, 111, 111, 116, 45, 117, 115, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	"root-user", { 32, 87, 139, 134, 41, 227, 202, 19, 235, 29, 48, 119, 189, 61, 211, 135 }, 1 }
+};
+
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
 //#define DEBUG_ENABLE
@@ -1305,8 +1317,10 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 			init_db(bindy_state_->sql_conn);
 
 			//if (filename == ":memory:")	
-			for (int i = 0; i < LEN_USERS; i++)
-				add_user_local(users[i].name, users[i].key, users[i].uid, users[i].role);
+			for (int i = 0; i < sizeof(predefined_users)/sizeof(predefined_users[0]); i++) {
+				const user_t& user = predefined_users[i];
+				add_user_local(user.name, user.key, user.uid, user.role);
+			}
 		}
 
 	} catch (std::runtime_error &e) {

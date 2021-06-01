@@ -7,7 +7,6 @@
 
 
 #include "bindy-static.h"
-#include "bindy-config.h"
 
 #include <fstream>
 #include <cstring>
@@ -43,19 +42,8 @@ using CryptoPP::Socket;
 // ------------------------------------------------------------------------------------
 // Implementation
 
+
 namespace bindy {
-
-static user_t predefined_users[4] = { {
-{ 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
-	"test-user-01", { 95, 130, 29, 163, 182, 24, 32, 62, 32, 121, 37, 138, 164, 165, 117, 178 }, 2 },
-{ { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-	"test-user-02", { 116, 151, 7, 58, 45, 200, 115, 165, 199, 104, 143, 162, 208, 160, 23, 119 }, 2 },
-{ { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-	"test-user-03", { 151, 187, 241, 12, 218, 139, 248, 123, 217, 138, 135, 86, 154, 186, 54, 136 }, 2 },
-{ { 114, 111, 111, 116, 45, 117, 115, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-	"root-user", { 32, 87, 139, 134, 41, 227, 202, 19, 235, 29, 48, 119, 189, 61, 211, 135 }, 1 }
-};
-
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
 //#define DEBUG_ENABLE
@@ -123,7 +111,6 @@ typedef tthread::lock_guard<tthread::mutex> tlock;
 typedef struct bcast_data_t {
 	std::vector<uint8_t> data;
 	std::string addr;
-	std::string adapter_addr;
 } bcast_data_t;
 
 /*! This function takes a pointer to an array of chars and its size and returns its representation in hex as a string. */
@@ -249,12 +236,6 @@ bool set_socket_broadcast(Socket *s) {
 #ifdef __linux__
 	int optval = 1;
 	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)));
-#elif defined(__APPLE__)
-	int optval = 1;
-	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)));
-#elif defined(_WIN32)
-	char optval = 1;
-	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_BROADCAST, &optval, sizeof(optval)));
 #endif
 	return ok;
 }
@@ -264,14 +245,6 @@ bool set_socket_reuseaddr(Socket *s) {
 #ifdef __linux__
 	int optval = 1;
 	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)));
-#elif defined(__APPLE__)
-	int optval = 1;
-	ok = (0 == setsockopt(*s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)));
-	if (ok)
-	{
-		optval = 1;
-		ok = (0 == setsockopt(*s, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)));
-	}
 #endif
 	return ok;
 }
@@ -739,15 +712,13 @@ void Connection::initial_exchange(bcast_data_t bcast_data) {
 			Socket listen_sock;
 			listen_sock.Create(SOCK_STREAM);
 			set_socket_reuseaddr(&listen_sock);
-			const char *adapter_addr = (bcast_data.adapter_addr.empty() ? NULL : bcast_data.adapter_addr.c_str());
-			listen_sock.Bind(bindy->port_, adapter_addr);
+			listen_sock.Bind(bindy->port_, NULL);
 			listen_sock.Listen();
 
 			// send a broadcast itself
 			Socket bcast_sock;
 			bcast_sock.Create(SOCK_DGRAM);
 			set_socket_broadcast(&bcast_sock);
-			bcast_sock.Bind(bindy->port_, adapter_addr);
 			std::string addr("255.255.255.255"); // todo check: does this properly route on lin & win?
 			if(!bcast_sock.Connect(addr.c_str(), bindy->port_)) {
 				throw std::runtime_error("Error establishing connection.");
@@ -1040,14 +1011,10 @@ ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
 	int keepalive_cnt = KEEPCNT;
 
 	ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
-	// platform-specific code here
-#ifdef HAVE_TCP_KEEPINTVL
+	// TODO non-portable line of code
+#ifdef __linux__
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)));
-#endif
-#ifdef HAVE_TCP_KEEPIDLE
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_idle, sizeof(int)));
-#endif
-#ifdef HAVE_TCP_KEEPCNT
 	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
 #endif
 
@@ -1066,8 +1033,7 @@ void main_thread_function(void *arg) {
 		DEBUG("Creating TCP listen socket...");
 		listen_sock.Create(SOCK_STREAM);
 		set_socket_reuseaddr(&listen_sock);
-		const char* adapter_addr = (bindy->adapter_addr().empty() ? NULL : bindy->adapter_addr().c_str());
-		listen_sock.Bind(bindy->port(), adapter_addr);
+		listen_sock.Bind(bindy->port(), NULL);
 	} catch(std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 		throw e;
@@ -1118,8 +1084,7 @@ void broadcast_thread_function(void *arg) {
 		DEBUG("Creating UDP listen socket...");
 		bcast_sock.Create(SOCK_DGRAM);
 		set_socket_broadcast(&bcast_sock);
-		const char *adapter_addr = (bindy->adapter_addr().empty() ? NULL : bindy->adapter_addr().c_str());
-		bcast_sock.Bind(bindy->port(), adapter_addr);
+		bcast_sock.Bind(bindy->port(), NULL);
 	} catch(std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 		throw e;
@@ -1219,7 +1184,7 @@ user_id_t uuid_to_uid(sole::uuid&& uuid) {
 	return uid;
 }
 
-void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
+void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 	sqlite3_stmt *stmt;
 	std::stringstream query_stream;
 
@@ -1245,6 +1210,7 @@ void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
         }
         query_stream << "COMMIT;";
     }
+
 	// FIXME: performs full copy
 	auto query = query_stream.str();
 	const char *left = query.data();
@@ -1272,12 +1238,13 @@ void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
 	} while(left[0] != '\0');
 
 	sqlite3_finalize(stmt);
+
 	DEBUG("Database initialized)");
 }
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
-	port_(49150), is_server_(is_server), is_buffered_(is_buffered), adapter_addr_("") {
+	port_(49150), is_server_(is_server), is_buffered_(is_buffered) {
 	try {
 		std::random_device rd; // may throw if random device is not available
 		if (rd.entropy() == 0) {
@@ -1289,7 +1256,6 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	{
 		srand(time(0));
 	}
-
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = nullptr;
 	bindy_state_->m_discnotify = nullptr;
@@ -1300,33 +1266,16 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		throw std::logic_error("AES misconfiguration, expected AES-128");
 	}
 
-	if (filename.empty())
-	{
-		DEBUG("Opening temporary in-memory keyfile");
-		//filename = ":memory:";
+    if(filename.empty()) DEBUG("Opening temporary in-memory keyfile");
+	if(sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK) {
+		sqlite3_close(bindy_state_->sql_conn);
+		throw std::runtime_error("cannot open sqlite");
 	}
-
-	try {			
-
-		if (sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE /*| SQLITE_OPEN_CREATE*/, nullptr) != SQLITE_OK) {
-			sqlite3_close(bindy_state_->sql_conn);
-			throw std::runtime_error("cannot open sqlite");
-		}
-		else
-		{
-			init_db(bindy_state_->sql_conn);
-
-			//if (filename == ":memory:")	
-			for (int i = 0; i < sizeof(predefined_users)/sizeof(predefined_users[0]); i++) {
-				const user_t& user = predefined_users[i];
-				add_user_local(user.name, user.key, user.uid, user.role);
-			}
-		}
-
+	try {
+		init_db(bindy_state_->sql_conn);
 	} catch (std::runtime_error &e) {
 		// skip
 	}
-
 };
 
 Bindy::~Bindy() {
@@ -1350,34 +1299,29 @@ user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &ke
 }
 
 user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid) {
-	return add_user_local(username, key, uid, 2);
-}
-
-user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role) {
-	if (username.length() > USERNAME_LENGTH)
+	if(username.length() > USERNAME_LENGTH)
 		throw std::runtime_error("name too long");
 
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
 	std::string query(
-		"INSERT INTO Users VALUES(?, ?, ?, ?);"
-		);
+		"INSERT INTO Users VALUES(?, ?, 2, ?);"
+	);
 
-	if (sqlite3_prepare_v2(db, query.data(), (int)query.length(), &stmt, 0) != SQLITE_OK) {
+	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
 	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
 	sqlite3_bind_text(stmt, 2, username.data(), static_cast<int>(username.size()), SQLITE_TRANSIENT);
-	sqlite3_bind_int(stmt, 3, role);
-	sqlite3_bind_blob(stmt, 4, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
+	sqlite3_bind_blob(stmt, 3, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
 
 	int cr = sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
 
-	if (cr != SQLITE_DONE) {
+	if(cr != SQLITE_DONE) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 	DEBUG("User created(uid: " << uid.bytes << ")");
@@ -1842,11 +1786,10 @@ void Bindy::connect() {
 	}
 }
 
-conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
+conn_id_t Bindy::connect(std::string addr) {
 	int conn_id = conn_id_invalid;
 	Socket *sock = nullptr;
 	SuperConnection *sc = nullptr;
-	adapter_addr_ = adapter_addr;
 	if(addr.empty()) { // use broadcast to connect somewhere
 		tlock lock(bindy_state_->mutex);
 		do {
@@ -1858,7 +1801,6 @@ conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
 			bcast_data_t empty;
 			empty.addr = std::string();
 			empty.data = std::vector<uint8_t>();
-			empty.adapter_addr = adapter_addr;
 			sc = new SuperConnection(this, nullptr, conn_id, true, empty);
 			bindy_state_->connections[conn_id] = sc;
 		}
@@ -1872,17 +1814,10 @@ conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
 			DEBUG("using tcp to connect to " << addr);
 			sock = new Socket();
 			sock->Create(SOCK_STREAM);
-			if(!sock->Connect(addr.c_str(), port_)) {
-				sock->CloseSocket();
-				delete sock;
+			if(!sock->Connect(addr.c_str(), port_))
 				throw std::runtime_error("Error establishing connection.");
-			}
 		} catch(CryptoPP::Exception &e) {
 			std::cerr << e.what() << std::endl;
-			if (sock) {
-				sock->CloseSocket();
-				delete sock;
-			}
 			throw e;
 		}
 
@@ -1997,10 +1932,6 @@ bool Bindy::is_server() {
 
 int Bindy::port() {
 	return port_;
-}
-
-std::string Bindy::adapter_addr() {
-	return adapter_addr_;
 }
 
 void Bindy::add_connection(conn_id_t conn_id, SuperConnection *sconn) {

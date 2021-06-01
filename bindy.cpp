@@ -160,13 +160,12 @@ public:
 //	user_t master; // root key
 	sqlite3 *sql_conn;
 
-	BindyState() {
-	}
+	BindyState():
+	    main_thread(nullptr),
+	    bcast_thread(nullptr),
+	    sql_conn(nullptr)
+    {}
 
-	~BindyState() {
-	}
-
-private:
 	BindyState(const BindyState &) = delete;
 
 	BindyState &operator=(const BindyState &) = delete;
@@ -174,15 +173,16 @@ private:
 
 class Countable {
 public:
-	Countable(conn_id_t id) {
+	explicit Countable(conn_id_t id):
+	    conn_id(id)
+	{
 		tlock lock(global_mutex);
-		this->conn_id = id;
 		if(map.count(conn_id) == 0) {
-			map[conn_id] = 0;
-		}
-		map_prev[conn_id] = map[conn_id];
-		++map[conn_id];
-		mutexes[conn_id] = new tthread::mutex();
+			map[conn_id] = 1;
+			mutexes[conn_id] = new tthread::mutex();
+		} else {
+            ++map[conn_id];
+        }
 	}
 
 	Countable(Countable const &) = delete;
@@ -191,14 +191,14 @@ public:
 
 	virtual ~Countable() {
 		tlock lock(global_mutex);
-		if(map.count(conn_id) == 1 && map[conn_id] > 1) {
-			map_prev[conn_id] = map[conn_id];
-			--map[conn_id];
-		} else {
-			map.erase(conn_id);
-			map_prev.erase(conn_id);
-			delete mutexes[conn_id];
-			mutexes.erase(conn_id);
+		if (map.count(conn_id)) {
+			if (map[conn_id] > 1) {
+				--map[conn_id];
+			} else {
+				map.erase(conn_id);
+				delete mutexes[conn_id];
+				mutexes.erase(conn_id);
+			}
 		}
 	}
 
@@ -207,25 +207,19 @@ public:
 		return map[conn_id];
 	}
 
-	unsigned int count_prev() {
-		tlock lock(global_mutex);
-		return map_prev[conn_id];
-	}
-
 	tthread::mutex *mutex() {
+        tlock lock(global_mutex);
 		return mutexes[conn_id];
 	}
 
 private:
 	conn_id_t conn_id;
 	static std::map<conn_id_t, unsigned int> map;
-	static std::map<conn_id_t, unsigned int> map_prev;
 	static std::map<conn_id_t, tthread::mutex *> mutexes;
 	static tthread::mutex global_mutex;
 };
 
 std::map<conn_id_t, unsigned int> Countable::map;
-std::map<conn_id_t, unsigned int> Countable::map_prev;
 std::map<conn_id_t, tthread::mutex *> Countable::mutexes;
 tthread::mutex Countable::global_mutex;
 
@@ -258,12 +252,7 @@ public:
 
 	~Connection();
 
-	Connection(Connection *other);
-
-	/*!
-	* Initializes shared socket.
-	*/
-	void init();
+	explicit Connection(Connection *other);
 
 	/*!
 	* Encrypts and sends a single message into this connection.
@@ -337,21 +326,22 @@ void socket_thread_function(void *arg);
 
 class SuperConnection : public Connection {
 public:
-	SuperConnection(Bindy *bindy, Socket *_socket, conn_id_t conn_id, bool inits, bcast_data_t bcast_data);
-
-	~SuperConnection();
+	SuperConnection(Bindy *_bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect, bcast_data_t bcast_data);
 };
 
-SuperConnection::SuperConnection(Bindy *_bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect,
-								 bcast_data_t bcast_data)
-	:
-	Connection(_bindy, _socket, conn_id, _inits_connect) {
+SuperConnection::SuperConnection(
+        Bindy *_bindy,
+        Socket *_socket,
+        conn_id_t conn_id,
+        bool _inits_connect,
+        bcast_data_t bcast_data
+):
+	Connection(_bindy, _socket, conn_id, _inits_connect)
+{
 	initial_exchange(bcast_data);
-	tthread::thread *t = new tthread::thread(socket_thread_function, this);
-	t->detach();
-}
 
-SuperConnection::~SuperConnection() {
+    std::thread socket_thread(socket_thread_function, this);
+	socket_thread.detach();
 }
 
 Connection::Connection(Bindy *_bindy, Socket *_socket, conn_id_t conn_id, bool _inits_connect) :
@@ -968,14 +958,15 @@ void socket_thread_function(void *arg) {
 					conn->send_packet(reply.type, reply.content);
 				}
 			}
-		};
+		}
 	} catch(...) {
 		DEBUG("Caught exception, deleting connection...");
 	}
-	conn->disconnect_self();
-	delete conn;
+	if (conn != nullptr) {
+        conn->disconnect_self();
+        delete conn;
+    }
 }
-
 
 bool set_socket_keepalive_nodelay(Socket *s) {
 	bool ok = true;
@@ -1943,8 +1934,8 @@ void Bindy::delete_connection(conn_id_t conn_id) {
 	tlock lock(bindy_state_->mutex);
 	if(bindy_state_->connections.count(conn_id) == 1) {
 		delete bindy_state_->connections[conn_id]; // safe, because we're under the global bindy mutex
-		bindy_state_->connections.erase(conn_id);
-	}
+        bindy_state_->connections.erase(conn_id);
+    }
 }
 
 std::list<conn_id_t> Bindy::list_connections() {

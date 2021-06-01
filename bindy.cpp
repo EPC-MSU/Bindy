@@ -1805,10 +1805,17 @@ conn_id_t Bindy::connect(std::string addr) {
 			DEBUG("using tcp to connect to " << addr);
 			sock = new Socket();
 			sock->Create(SOCK_STREAM);
-			if(!sock->Connect(addr.c_str(), port_))
+			if(!sock->Connect(addr.c_str(), port_)) {
+				sock->CloseSocket();
+				delete sock;
 				throw std::runtime_error("Error establishing connection.");
+			}
 		} catch(CryptoPP::Exception &e) {
 			std::cerr << e.what() << std::endl;
+			if(sock) {
+				sock->CloseSocket();
+				delete sock;
+			}
 			throw e;
 		}
 

@@ -476,7 +476,8 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 		sent = sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
 		DEBUG("to send (w/headers): " << to_send << "; sent = " << sent);
 	} catch(CryptoPP::Exception &e) {
-		std::cerr << "Caught exception (net): " << e.what() << std::endl;
+		std::cerr << "Caught exception (net): " << e.what() << " Thread Id: " << std::this_thread::get_id() << std::endl;
+	
 		throw e;
 	}
 }
@@ -959,11 +960,14 @@ void socket_thread_function(void *arg) {
 				}
 			}
 		}
-	} catch(...) {
-		DEBUG("Caught exception, deleting connection...");
+	} catch(std::exception &ex) {
+		//DEBUG("Caught exception, deleting connection...");
+		std::cerr << "Socket_thread_ex conn_id: " << conn->conn_id << 
+			      " Thread Id: " << std::this_thread::get_id() << " :" << ex.what() << "\n";
+	
 	}
 	if (conn != nullptr) {
-        conn->disconnect_self();
+        conn->disconnect_self ();
         delete conn;
     }
 }

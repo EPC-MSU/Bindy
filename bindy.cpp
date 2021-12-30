@@ -46,10 +46,12 @@ using CryptoPP::Socket;
 namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
-//#define DEBUG_ENABLE
+static bool log_yes = false;
+
+#define DEBUG_ENABLE
 #define DEBUG_PREFIX ""
 #ifdef DEBUG_ENABLE
-#define DEBUG(text) { stdout_mutex->lock(); std::cout << DEBUG_PREFIX << text << std::endl; stdout_mutex->unlock(); }
+#define DEBUG(text) if (log_yes) { stdout_mutex->lock(); std::cout << DEBUG_PREFIX << text << std::endl; stdout_mutex->unlock(); }
 #else
 #define DEBUG(text) { ; }
 #endif
@@ -962,8 +964,8 @@ void socket_thread_function(void *arg) {
 		}
 	} catch(std::exception &ex) {
 		//DEBUG("Caught exception, deleting connection...");
-		std::cerr << "Socket_thread_ex conn_id: " << conn->conn_id << 
-			      " Thread Id: " << std::this_thread::get_id() << " :" << ex.what() << "\n";
+		DEBUG("Socket_thread_ex conn_id : " << conn->conn_id << " Thread Id: " << std::this_thread::get_id()
+			<< " : " << ex.what());
 	
 	}
 	if (conn != nullptr) {
@@ -1237,7 +1239,7 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 	DEBUG("Database initialized)");
 }
 
-Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
+Bindy::Bindy(std::string filename, bool is_server, bool is_buffered, bool debug)
 	:
 	port_(49150), is_server_(is_server), is_buffered_(is_buffered) {
 	try {
@@ -1251,6 +1253,9 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	{
 		srand(time(0));
 	}
+
+	log_yes = debug;
+
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = nullptr;
 	bindy_state_->m_discnotify = nullptr;

@@ -115,7 +115,7 @@ public:
 	*	If this parameter is true, then incoming data is stored in the buffer and may be retrieved using "read" function.
 	*	If this parameter is false, then incoming data immediately triggers callback function if the callback is set.
 	*/
-	Bindy(std::string filename, bool is_active_node, bool is_buffered);
+	Bindy(std::string filename, bool is_active_node, bool is_buffered, bool debug);
 
 	/*!
 	*	Class destructor.

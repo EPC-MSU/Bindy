@@ -19,6 +19,7 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/gcm.h>
 #include <cryptopp/socketft.h>
+#include <zf_log.h>
 
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
@@ -46,13 +47,77 @@ using CryptoPP::Socket;
 namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
-//#define DEBUG_ENABLE
+/*#define DEBUG_ENABLE
 #define DEBUG_PREFIX ""
 #ifdef DEBUG_ENABLE
 #define DEBUG(text) { stdout_mutex->lock(); std::cout << DEBUG_PREFIX << text << std::endl; stdout_mutex->unlock(); }
 #else
 #define DEBUG(text) { ; }
-#endif
+#endif*/
+
+class bindy_log_helper
+{
+public:
+	bindy_log_helper() { *_buffer = 0; }
+	bindy_log_helper &operator << (const char *text)
+	{
+		if (strlen(_buffer) + strlen(text) <=1024)
+		   strcat(_buffer, text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (unsigned char *text)
+	{
+		if (strlen(_buffer) + strlen((char *)text) <= 1024)
+			strcat(_buffer, (char *)text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (size_t number)
+	{
+		if (strlen(_buffer) < 1024 -16)
+  		   sprintf(strchr(_buffer, 0), "%d", number);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (std::string str)
+	{
+		if (strlen(_buffer) + str.length() < 1024 )
+			strcat(_buffer, str.data());
+
+
+		return *this;
+	}
+	
+	bindy_log_helper &operator << (const uint8_t arr[32])
+	{
+		for (int i = 0; i < 32; i++)
+		{
+			if (strlen(_buffer) + 4 > 1024) break;
+			sprintf(strchr(_buffer, 0), " %d", arr[i]);
+		}
+
+
+		return *this;
+
+	}
+
+	const char *buffer() const { return _buffer; }
+	void clear() { *_buffer = 0; }
+	//bindy_log_helper &operator << ()
+
+private:
+	static char _buffer[1024];
+};
+
+
+char bindy_log_helper::_buffer[1024];
+
+bindy_log_helper log_helper;
+
+#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
+
+
 
 /*! TCP KeepAlive option: Keepalive probe send interval in seconds. */
 #define KEEPINTVL 5

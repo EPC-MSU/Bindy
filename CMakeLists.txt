@@ -1,5 +1,5 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.9)
-
+ 
 PROJECT(bindy)
 
 OPTION(BUILD_SHARED_LIBS "Build shared libraries" ON)
@@ -65,7 +65,7 @@ FUNCTION(CONFIGURE_CRYPTOPP)
 ENDFUNCTION()
 
 CONFIGURE_CRYPTOPP()
-TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static)
+TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static zf_log)
 
 IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
     # librt is not static part of glibc in many Linux distros

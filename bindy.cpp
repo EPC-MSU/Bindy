@@ -19,6 +19,7 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/gcm.h>
 #include <cryptopp/socketft.h>
+#include <zf_log.h>
 
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
@@ -46,8 +47,7 @@ using CryptoPP::Socket;
 namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
-static bool log_yes = false;
-
+/*
 #define DEBUG_ENABLE
 #define DEBUG_PREFIX ""
 #ifdef DEBUG_ENABLE
@@ -55,6 +55,80 @@ static bool log_yes = false;
 #else
 #define DEBUG(text) { ; }
 #endif
+*/
+/**
+  * class to help use the DEBUG macro together with
+  * << stream operator plus ZF_LOG - functions !!!
+*/
+
+#define STATIC_DEBUG_MES_LEN 2048
+
+class bindy_log_helper
+{
+public:
+	bindy_log_helper() 
+	{ 
+		*_buffer = 0; 
+	}
+
+	bindy_log_helper &operator << (const char *text)
+	{
+		if (strlen(_buffer) + strlen(text) <= 1024)
+			strcat(_buffer, text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (unsigned char *text)
+	{
+		if (strlen(_buffer) + strlen((char *)text) <= STATIC_DEBUG_MES_LEN)
+			strcat(_buffer, (char *)text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (size_t number)
+	{
+		if (strlen(_buffer) < STATIC_DEBUG_MES_LEN - 16)
+			sprintf(strchr(_buffer, 0), "%d", number);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (std::string str)
+	{
+		if (strlen(_buffer) + str.length() < STATIC_DEBUG_MES_LEN)
+			strcat(_buffer, str.data());
+
+
+		return *this;
+	}
+
+	bindy_log_helper &operator << (const uint8_t arr[32])
+	{
+		for (int i = 0; i < 32; i++)
+		{
+			if (strlen(_buffer) + 4 > STATIC_DEBUG_MES_LEN) break;
+			sprintf(strchr(_buffer, 0), " %d", arr[i]);
+		}
+
+
+		return *this;
+
+	}
+
+	const char *buffer() const { return _buffer; }
+	void clear() { *_buffer = 0; }
+	
+private:
+
+	static char _buffer[STATIC_DEBUG_MES_LEN];
+};
+
+char bindy_log_helper::_buffer[STATIC_DEBUG_MES_LEN] = ""; // static buffer initialization
+
+bindy_log_helper log_helper; // log-helper initialization
+
+/* * new debug macro
+*/
+#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
 
 /*! TCP KeepAlive option: Keepalive probe send interval in seconds. */
 #define KEEPINTVL 5
@@ -963,10 +1037,8 @@ void socket_thread_function(void *arg) {
 			}
 		}
 	} catch(std::exception &ex) {
-		//DEBUG("Caught exception, deleting connection...");
-		DEBUG("Socket_thread_ex conn_id : " << conn->conn_id << " Thread Id: " << std::this_thread::get_id()
-			<< " : " << ex.what());
-	
+		DEBUG("Caught exception, deleting connection...");
+		
 	}
 	if (conn != nullptr) {
         conn->disconnect_self ();
@@ -1239,7 +1311,7 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 	DEBUG("Database initialized)");
 }
 
-Bindy::Bindy(std::string filename, bool is_server, bool is_buffered, bool debug)
+Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
 	port_(49150), is_server_(is_server), is_buffered_(is_buffered) {
 	try {
@@ -1253,9 +1325,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered, bool debug)
 	{
 		srand(time(0));
 	}
-
-	log_yes = debug;
-
+		
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = nullptr;
 	bindy_state_->m_discnotify = nullptr;

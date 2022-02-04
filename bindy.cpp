@@ -56,6 +56,7 @@ static tthread::mutex *stdout_mutex = new tthread::mutex();
 #define DEBUG(text) { ; }
 #endif
 */
+
 /**
   * class to help use the DEBUG macro together with
   * << stream operator plus ZF_LOG - functions !!!
@@ -106,12 +107,10 @@ public:
 		for (int i = 0; i < 32; i++)
 		{
 			if (strlen(_buffer) + 4 > STATIC_DEBUG_MES_LEN) break;
-			sprintf(strchr(_buffer, 0), " %d", arr[i]);
+			sprintf(strchr(_buffer, 0), " %lu", arr[i]);
 		}
 
-
 		return *this;
-
 	}
 
 	const char *buffer() const { return _buffer; }

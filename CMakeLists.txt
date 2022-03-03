@@ -4,6 +4,7 @@ PROJECT(bindy)
 
 OPTION(BUILD_SHARED_LIBS "Build shared libraries" ON)
 OPTION(BUILD_EXAMPLE "Build exmaple client/server application" OFF)
+OPTION(BUILD_STANDALONE "Build bindy out of any other projects" ON)
 
 IF(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
     # It is required to build a rpath framework
@@ -51,6 +52,16 @@ IF(BUILD_SHARED_LIBS)
     SET_TARGET_PROPERTIES(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
 ENDIF()
 
+FUNCTION(ADD_SUBDIRECTORY_ZF_LOG)
+IF(BUILD_STANDALONE)
+    SET(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
+	ADD_DEFINITIONS(-DZF_LOG_DEF_LEVEL=ZF_LOG_WARN)
+    ADD_SUBDIRECTORY(vendor/zf_log/zf_log)
+ENDIF()	
+ENDFUNCTION()
+
+ADD_SUBDIRECTORY_ZF_LOG()
+
 FUNCTION(CONFIGURE_CRYPTOPP)
     # Unconditionally configure cryptopp in separate scope
     SET(BUILD_STATIC ON CACHE INTERNAL "")
@@ -81,5 +92,7 @@ IF(BUILD_EXAMPLE)
     IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
         # When both CXX and C used, compilation fails without -ldl flag on Linux systems
         TARGET_LINK_LIBRARIES(bindy-main LINK_PRIVATE dl)
+    ELSEIF(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
+	    TARGET_LINK_LIBRARIES(bindy-main LINK_PRIVATE Ws2_32)
     ENDIF()
 ENDIF()

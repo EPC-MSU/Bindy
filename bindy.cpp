@@ -19,6 +19,7 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/gcm.h>
 #include <cryptopp/socketft.h>
+
 #include <zf_log.h>
 
 #include "tinythread.h"
@@ -47,20 +48,13 @@ using CryptoPP::Socket;
 namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
-/*
-#define DEBUG_ENABLE
-#define DEBUG_PREFIX ""
-#ifdef DEBUG_ENABLE
-#define DEBUG(text) if (log_yes) { stdout_mutex->lock(); std::cout << DEBUG_PREFIX << text << std::endl; stdout_mutex->unlock(); }
-#else
-#define DEBUG(text) { ; }
-#endif
-*/
-
 /**
   * class to help use the DEBUG macro together with
   * << stream operator plus ZF_LOG - functions !!!
 */
+
+
+#if (ZF_LOG_ON_DEBUG)
 
 #define STATIC_DEBUG_MES_LEN 2048
 
@@ -128,6 +122,10 @@ bindy_log_helper log_helper; // log-helper initialization
 /* * new debug macro
 */
 #define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
+#else
+#define DEBUG(text) { ; }
+#endif
+
 
 /*! TCP KeepAlive option: Keepalive probe send interval in seconds. */
 #define KEEPINTVL 5

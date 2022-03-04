@@ -4,7 +4,7 @@ PROJECT(bindy)
 
 OPTION(BUILD_SHARED_LIBS "Build shared libraries" ON)
 OPTION(BUILD_EXAMPLE "Build exmaple client/server application" OFF)
-OPTION(BUILD_STANDALONE "Build bindy out of any other projects" ON)
+OPTION(ALREADY_ADDED_ZF_LOG "If zf_log is included by anyone else" OFF)
 
 IF(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
     # It is required to build a rpath framework
@@ -53,7 +53,7 @@ IF(BUILD_SHARED_LIBS)
 ENDIF()
 
 FUNCTION(ADD_SUBDIRECTORY_ZF_LOG)
-IF(BUILD_STANDALONE)
+IF(NOT ALREADY_ADDED_ZF_LOG)
     SET(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
 	ADD_DEFINITIONS(-DZF_LOG_DEF_LEVEL=ZF_LOG_WARN)
     ADD_SUBDIRECTORY(vendor/zf_log/zf_log)

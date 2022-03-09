@@ -49,9 +49,9 @@ namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
 /**
-  * class to help use the DEBUG macro together with
-  * << stream operator plus ZF_LOG - functions !!!
-*/
+ * class to help use the DEBUG macro together with
+ * << stream operator plus ZF_LOG - functions !!!
+ */
 
 
 #if (ZF_LOG_ON_DEBUG)
@@ -62,7 +62,7 @@ class bindy_log_helper
 {
 public:
 	bindy_log_helper() 
-	{ 
+	{
 		*_buffer = 0; 
 	}
 
@@ -403,17 +403,17 @@ public:
 };
 
 SuperConnection::SuperConnection(
-        Bindy *_bindy,
-        Socket *_socket,
-        conn_id_t conn_id,
-        bool _inits_connect,
-        bcast_data_t bcast_data
+	Bindy *_bindy,
+	Socket *_socket,
+	conn_id_t conn_id,
+	bool _inits_connect,
+	bcast_data_t bcast_data
 ):
 	Connection(_bindy, _socket, conn_id, _inits_connect)
 {
 	initial_exchange(bcast_data);
 
-    std::thread socket_thread(socket_thread_function, this);
+	std::thread socket_thread(socket_thread_function, this);
 	socket_thread.detach();
 }
 
@@ -550,7 +550,7 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 		DEBUG("to send (w/headers): " << to_send << "; sent = " << sent);
 	} catch(CryptoPP::Exception &e) {
 		std::cerr << "Caught exception (net): " << e.what() << " Thread Id: " << std::this_thread::get_id() << std::endl;
-	
+
 		throw e;
 	}
 }
@@ -654,8 +654,8 @@ int Connection::buffer_read(uint8_t *p, int size) {
 
 void Connection::buffer_write(std::vector<uint8_t> data) {
 	for(unsigned int i = 0; i < data.size(); i++) {
-        buffer->push_back(data[i]);
-    }
+		buffer->push_back(data[i]);
+	}
 }
 
 void Connection::callback_data(std::vector<uint8_t> data) {
@@ -663,38 +663,38 @@ void Connection::callback_data(std::vector<uint8_t> data) {
 }
 
 user_vector_t extract_from_old_config(std::string filename) {
-    std::ifstream is (filename.data(), std::ifstream::binary);
-    if(is.good()) {
-        is.seekg (0, is.end);
-        //std::streampos length = is.tellg();
-        is.seekg (0, is.beg);
-    } else {
-        throw std::runtime_error("bad binary config file");
-    }
+	std::ifstream is (filename.data(), std::ifstream::binary);
+	if(is.good()) {
+		is.seekg (0, is.end);
+		//std::streampos length = is.tellg();
+		is.seekg (0, is.beg);
+	} else {
+		throw std::runtime_error("bad binary config file");
+	}
 
-    user_vector_t users;
-    int count = 0;
-    while(true) {
-        user_t user;
+	user_vector_t users;
+	int count = 0;
+	while(true) {
+		user_t user;
 
-        memset(&user.uid, 0, sizeof(user_id_t));
-        is.read(reinterpret_cast<char *>(&user.uid), AUTH_DATA_LENGTH);
-        user.name = std::string(reinterpret_cast<char *>(&user.uid));
-        is.read(reinterpret_cast<char *>(&user.key), AES_KEY_LENGTH);
+		memset(&user.uid, 0, sizeof(user_id_t));
+		is.read(reinterpret_cast<char *>(&user.uid), AUTH_DATA_LENGTH);
+		user.name = std::string(reinterpret_cast<char *>(&user.uid));
+		is.read(reinterpret_cast<char *>(&user.key), AES_KEY_LENGTH);
 
-        user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
+		user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
 
-        if(is.good()) {
-            users.push_back(std::move(user));
-        } else {
-            break;
-        }
+		if(is.good()) {
+			users.push_back(std::move(user));
+		} else {
+			break;
+		}
 
-        count++;
-    }
-    is.close();
+		count++;
+	}
+	is.close();
 
-    return std::move(users);
+	return std::move(users);
 }
 
 void Connection::initial_exchange(bcast_data_t bcast_data) {
@@ -1038,9 +1038,9 @@ void socket_thread_function(void *arg) {
 		
 	}
 	if (conn != nullptr) {
-        conn->disconnect_self ();
-        delete conn;
-    }
+		conn->disconnect_self();
+		delete conn;
+	}
 }
 
 bool set_socket_keepalive_nodelay(Socket *s) {
@@ -1264,18 +1264,18 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 		query_stream << s;
 	}
 
-    if(users.size() > 0) {
-        query_stream << "BEGIN;";
-        query_stream << "INSERT INTO Users VALUES ";
-        short int i = 0;
-        for(const user_t &user : users) {
-            assert(user.role == 1 || user.role == 2);
-            query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
-            query_stream << (i < users.size()-1 ? "," : ";");
-            i++;
-        }
-        query_stream << "COMMIT;";
-    }
+	if(users.size() > 0) {
+		query_stream << "BEGIN;";
+		query_stream << "INSERT INTO Users VALUES ";
+		short int i = 0;
+		for(const user_t &user : users) {
+			assert(user.role == 1 || user.role == 2);
+			query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
+			query_stream << (i < users.size()-1 ? "," : ";");
+			i++;
+		}
+		query_stream << "COMMIT;";
+	}
 
 	// FIXME: performs full copy
 	auto query = query_stream.str();

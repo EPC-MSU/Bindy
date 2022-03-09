@@ -20,6 +20,8 @@
 #include <cryptopp/gcm.h>
 #include <cryptopp/socketft.h>
 
+#include <zf_log.h>
+
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
 #include "sole/sole.hpp"
@@ -46,13 +48,84 @@ using CryptoPP::Socket;
 namespace bindy {
 static tthread::mutex *stdout_mutex = new tthread::mutex();
 
-//#define DEBUG_ENABLE
-#define DEBUG_PREFIX ""
-#ifdef DEBUG_ENABLE
-#define DEBUG(text) { stdout_mutex->lock(); std::cout << DEBUG_PREFIX << text << std::endl; stdout_mutex->unlock(); }
+/**
+ * class to help use the DEBUG macro together with
+ * << stream operator plus ZF_LOG - functions !!!
+ */
+
+
+#if (ZF_LOG_ON_DEBUG)
+
+#define STATIC_DEBUG_MES_LEN 2048
+
+class bindy_log_helper
+{
+public:
+	bindy_log_helper() 
+	{
+		*_buffer = 0; 
+	}
+
+	bindy_log_helper &operator << (const char *text)
+	{
+		if (strlen(_buffer) + strlen(text) <= 1024)
+			strcat(_buffer, text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (unsigned char *text)
+	{
+		if (strlen(_buffer) + strlen((char *)text) <= STATIC_DEBUG_MES_LEN)
+			strcat(_buffer, (char *)text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (size_t number)
+	{
+		if (strlen(_buffer) < STATIC_DEBUG_MES_LEN - 16)
+			sprintf(strchr(_buffer, 0), "%d", number);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (std::string str)
+	{
+		if (strlen(_buffer) + str.length() < STATIC_DEBUG_MES_LEN)
+			strcat(_buffer, str.data());
+
+
+		return *this;
+	}
+
+	bindy_log_helper &operator << (const uint8_t arr[32])
+	{
+		for (int i = 0; i < 32; i++)
+		{
+			if (strlen(_buffer) + 4 > STATIC_DEBUG_MES_LEN) break;
+			sprintf(strchr(_buffer, 0), " %lu", arr[i]);
+		}
+
+		return *this;
+	}
+
+	const char *buffer() const { return _buffer; }
+	void clear() { *_buffer = 0; }
+	
+private:
+
+	static char _buffer[STATIC_DEBUG_MES_LEN];
+};
+
+char bindy_log_helper::_buffer[STATIC_DEBUG_MES_LEN] = ""; // static buffer initialization
+
+bindy_log_helper log_helper; // log-helper initialization
+
+/* * new debug macro
+*/
+#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
 #else
 #define DEBUG(text) { ; }
 #endif
+
 
 /*! TCP KeepAlive option: Keepalive probe send interval in seconds. */
 #define KEEPINTVL 5
@@ -330,17 +403,17 @@ public:
 };
 
 SuperConnection::SuperConnection(
-        Bindy *_bindy,
-        Socket *_socket,
-        conn_id_t conn_id,
-        bool _inits_connect,
-        bcast_data_t bcast_data
+	Bindy *_bindy,
+	Socket *_socket,
+	conn_id_t conn_id,
+	bool _inits_connect,
+	bcast_data_t bcast_data
 ):
 	Connection(_bindy, _socket, conn_id, _inits_connect)
 {
 	initial_exchange(bcast_data);
 
-    std::thread socket_thread(socket_thread_function, this);
+	std::thread socket_thread(socket_thread_function, this);
 	socket_thread.detach();
 }
 
@@ -476,7 +549,8 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 		sent = sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
 		DEBUG("to send (w/headers): " << to_send << "; sent = " << sent);
 	} catch(CryptoPP::Exception &e) {
-		std::cerr << "Caught exception (net): " << e.what() << std::endl;
+		std::cerr << "Caught exception (net): " << e.what() << " Thread Id: " << std::this_thread::get_id() << std::endl;
+
 		throw e;
 	}
 }
@@ -580,8 +654,8 @@ int Connection::buffer_read(uint8_t *p, int size) {
 
 void Connection::buffer_write(std::vector<uint8_t> data) {
 	for(unsigned int i = 0; i < data.size(); i++) {
-        buffer->push_back(data[i]);
-    }
+		buffer->push_back(data[i]);
+	}
 }
 
 void Connection::callback_data(std::vector<uint8_t> data) {
@@ -589,38 +663,38 @@ void Connection::callback_data(std::vector<uint8_t> data) {
 }
 
 user_vector_t extract_from_old_config(std::string filename) {
-    std::ifstream is (filename.data(), std::ifstream::binary);
-    if(is.good()) {
-        is.seekg (0, is.end);
-        //std::streampos length = is.tellg();
-        is.seekg (0, is.beg);
-    } else {
-        throw std::runtime_error("bad binary config file");
-    }
+	std::ifstream is (filename.data(), std::ifstream::binary);
+	if(is.good()) {
+		is.seekg (0, is.end);
+		//std::streampos length = is.tellg();
+		is.seekg (0, is.beg);
+	} else {
+		throw std::runtime_error("bad binary config file");
+	}
 
-    user_vector_t users;
-    int count = 0;
-    while(true) {
-        user_t user;
+	user_vector_t users;
+	int count = 0;
+	while(true) {
+		user_t user;
 
-        memset(&user.uid, 0, sizeof(user_id_t));
-        is.read(reinterpret_cast<char *>(&user.uid), AUTH_DATA_LENGTH);
-        user.name = std::string(reinterpret_cast<char *>(&user.uid));
-        is.read(reinterpret_cast<char *>(&user.key), AES_KEY_LENGTH);
+		memset(&user.uid, 0, sizeof(user_id_t));
+		is.read(reinterpret_cast<char *>(&user.uid), AUTH_DATA_LENGTH);
+		user.name = std::string(reinterpret_cast<char *>(&user.uid));
+		is.read(reinterpret_cast<char *>(&user.key), AES_KEY_LENGTH);
 
-        user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
+		user.role = static_cast<role_id_t>(count == 0 ? 1 : 2);
 
-        if(is.good()) {
-            users.push_back(std::move(user));
-        } else {
-            break;
-        }
+		if(is.good()) {
+			users.push_back(std::move(user));
+		} else {
+			break;
+		}
 
-        count++;
-    }
-    is.close();
+		count++;
+	}
+	is.close();
 
-    return std::move(users);
+	return std::move(users);
 }
 
 void Connection::initial_exchange(bcast_data_t bcast_data) {
@@ -959,13 +1033,14 @@ void socket_thread_function(void *arg) {
 				}
 			}
 		}
-	} catch(...) {
+	} catch(std::exception &ex) {
 		DEBUG("Caught exception, deleting connection...");
+		
 	}
 	if (conn != nullptr) {
-        conn->disconnect_self();
-        delete conn;
-    }
+		conn->disconnect_self();
+		delete conn;
+	}
 }
 
 bool set_socket_keepalive_nodelay(Socket *s) {
@@ -1189,18 +1264,18 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 		query_stream << s;
 	}
 
-    if(users.size() > 0) {
-        query_stream << "BEGIN;";
-        query_stream << "INSERT INTO Users VALUES ";
-        short int i = 0;
-        for(const user_t &user : users) {
-            assert(user.role == 1 || user.role == 2);
-            query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
-            query_stream << (i < users.size()-1 ? "," : ";");
-            i++;
-        }
-        query_stream << "COMMIT;";
-    }
+	if(users.size() > 0) {
+		query_stream << "BEGIN;";
+		query_stream << "INSERT INTO Users VALUES ";
+		short int i = 0;
+		for(const user_t &user : users) {
+			assert(user.role == 1 || user.role == 2);
+			query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
+			query_stream << (i < users.size()-1 ? "," : ";");
+			i++;
+		}
+		query_stream << "COMMIT;";
+	}
 
 	// FIXME: performs full copy
 	auto query = query_stream.str();
@@ -1247,6 +1322,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	{
 		srand(time(0));
 	}
+		
 	bindy_state_ = new BindyState();
 	bindy_state_->m_datasink = nullptr;
 	bindy_state_->m_discnotify = nullptr;

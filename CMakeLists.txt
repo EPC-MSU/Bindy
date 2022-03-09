@@ -1,9 +1,10 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.9)
-
+ 
 PROJECT(bindy)
 
 OPTION(BUILD_SHARED_LIBS "Build shared libraries" ON)
 OPTION(BUILD_EXAMPLE "Build exmaple client/server application" OFF)
+OPTION(USE_JOINT_ZFLOG_FROM_ROOT_PROJECT "If zf_log is included by anyone else" OFF)
 
 IF(${CMAKE_SYSTEM_NAME} STREQUAL Darwin)
     # It is required to build a rpath framework
@@ -51,6 +52,16 @@ IF(BUILD_SHARED_LIBS)
     SET_TARGET_PROPERTIES(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
 ENDIF()
 
+FUNCTION(ADD_SUBDIRECTORY_ZF_LOG)
+IF(NOT USE_JOINT_ZFLOG_FROM_ROOT_PROJECT)
+    SET(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
+	ADD_DEFINITIONS(-DZF_LOG_DEF_LEVEL=ZF_LOG_WARN)
+    ADD_SUBDIRECTORY(vendor/zf_log/zf_log)
+ENDIF()	
+ENDFUNCTION()
+
+ADD_SUBDIRECTORY_ZF_LOG()
+
 FUNCTION(CONFIGURE_CRYPTOPP)
     # Unconditionally configure cryptopp in separate scope
     SET(BUILD_STATIC ON CACHE INTERNAL "")
@@ -61,11 +72,14 @@ FUNCTION(CONFIGURE_CRYPTOPP)
     SET(DISABLE_SSSE3 OFF CACHE INTERNAL "")
     SET(DISABLE_AESNI OFF CACHE INTERNAL "")
     SET(CRYPTOPP_DATA_DIR CACHE INTERNAL "")
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	    add_definitions(-Wno-stringop-overflow)
+    endif()	    
     ADD_SUBDIRECTORY(vendor/cryptopp)
 ENDFUNCTION()
 
 CONFIGURE_CRYPTOPP()
-TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static)
+TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static zf_log)
 
 IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
     # librt is not static part of glibc in many Linux distros
@@ -78,5 +92,7 @@ IF(BUILD_EXAMPLE)
     IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
         # When both CXX and C used, compilation fails without -ldl flag on Linux systems
         TARGET_LINK_LIBRARIES(bindy-main LINK_PRIVATE dl)
+    ELSEIF(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
+	    TARGET_LINK_LIBRARIES(bindy-main LINK_PRIVATE Ws2_32)
     ENDIF()
 ENDIF()

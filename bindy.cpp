@@ -21,6 +21,7 @@
 #include <cryptopp/gcm.h>
 #include <cryptopp/socketft.h>
 
+#include <zf_log.h>
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
 #include "sole/sole.hpp"
@@ -44,6 +45,7 @@ using CryptoPP::Socket;
 // Implementation
 
 namespace bindy {
+static tthread::mutex *stdout_mutex = new tthread::mutex();														   
 
 static user_t predefined_users[4] = { {
 { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
@@ -56,12 +58,79 @@ static user_t predefined_users[4] = { {
 	"root-user", { 32, 87, 139, 134, 41, 227, 202, 19, 235, 29, 48, 119, 189, 61, 211, 135 }, 1 }
 };
 
-static tthread::mutex *stdout_mutex = new tthread::mutex();
+/**
+ * class to help use the DEBUG macro together with
+ * << stream operator plus ZF_LOG - functions !!!
+ */
 
-//#define DEBUG_ENABLE
-#define DEBUG_PREFIX ""
-#ifdef DEBUG_ENABLE
-#define DEBUG(text) { stdout_mutex->lock(); std::cout << DEBUG_PREFIX << text << std::endl; stdout_mutex->unlock(); }
+#if (ZF_LOG_ON_DEBUG)
+
+#define STATIC_DEBUG_MES_LEN 2048
+
+class bindy_log_helper
+{
+public:
+	bindy_log_helper() 
+	{
+		*_buffer = 0; 
+	}
+
+	bindy_log_helper &operator << (const char *text)
+	{
+		if (strlen(_buffer) + strlen(text) <= 1024)
+			strcat(_buffer, text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (unsigned char *text)
+	{
+		if (strlen(_buffer) + strlen((char *)text) <= STATIC_DEBUG_MES_LEN)
+			strcat(_buffer, (char *)text);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (size_t number)
+	{
+		if (strlen(_buffer) < STATIC_DEBUG_MES_LEN - 16)
+			sprintf(strchr(_buffer, 0), "%d", number);
+		return *this;
+	}
+
+	bindy_log_helper &operator << (std::string str)
+	{
+		if (strlen(_buffer) + str.length() < STATIC_DEBUG_MES_LEN)
+			strcat(_buffer, str.data());
+
+
+		return *this;
+	}
+
+	bindy_log_helper &operator << (const uint8_t arr[32])
+	{
+		for (int i = 0; i < 32; i++)
+		{
+			if (strlen(_buffer) + 4 > STATIC_DEBUG_MES_LEN) break;
+			sprintf(strchr(_buffer, 0), " %lu", arr[i]);
+		}
+
+		return *this;
+	}
+
+	const char *buffer() const { return _buffer; }
+	void clear() { *_buffer = 0; }
+	
+private:
+
+	static char _buffer[STATIC_DEBUG_MES_LEN];
+};
+
+char bindy_log_helper::_buffer[STATIC_DEBUG_MES_LEN] = ""; // static buffer initialization
+
+bindy_log_helper log_helper; // log-helper initialization
+
+/* * new debug macro
+*/
+define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
 #else
 #define DEBUG(text) { ; }
 #endif
@@ -173,13 +242,15 @@ public:
 //	user_t master; // root key
 	sqlite3 *sql_conn;
 
-	BindyState() {
-	}
+	BindyState():
+	    main_thread(nullptr),
+	    bcast_thread(nullptr),
+	    sql_conn(nullptr) 
+{}
 
 	~BindyState() {
 	}
 
-private:
 	BindyState(const BindyState &) = delete;
 
 	BindyState &operator=(const BindyState &) = delete;

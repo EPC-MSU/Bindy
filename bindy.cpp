@@ -264,7 +264,6 @@ public:
 		if(map.count(conn_id) == 0) {
 			map[conn_id] = 0;
 		}
-		map_prev[conn_id] = map[conn_id];
 		++map[conn_id];
 		mutexes[conn_id] = new tthread::mutex();
 	}
@@ -276,11 +275,9 @@ public:
 	virtual ~Countable() {
 		tlock lock(global_mutex);
 		if(map.count(conn_id) == 1 && map[conn_id] > 1) {
-			map_prev[conn_id] = map[conn_id];
 			--map[conn_id];
 		} else {
 			map.erase(conn_id);
-			map_prev.erase(conn_id);
 			delete mutexes[conn_id];
 			mutexes.erase(conn_id);
 		}
@@ -291,11 +288,6 @@ public:
 		return map[conn_id];
 	}
 
-	unsigned int count_prev() {
-		tlock lock(global_mutex);
-		return map_prev[conn_id];
-	}
-
 	tthread::mutex *mutex() {
 		return mutexes[conn_id];
 	}
@@ -303,13 +295,11 @@ public:
 private:
 	conn_id_t conn_id;
 	static std::map<conn_id_t, unsigned int> map;
-	static std::map<conn_id_t, unsigned int> map_prev;
 	static std::map<conn_id_t, tthread::mutex *> mutexes;
 	static tthread::mutex global_mutex;
 };
 
 std::map<conn_id_t, unsigned int> Countable::map;
-std::map<conn_id_t, unsigned int> Countable::map_prev;
 std::map<conn_id_t, tthread::mutex *> Countable::mutexes;
 tthread::mutex Countable::global_mutex;
 

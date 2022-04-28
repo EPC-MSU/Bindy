@@ -4,3 +4,7 @@
 [submodule "vendor/cryptopp"]
 	path = vendor/cryptopp
 	url = https://github.com/EPC-MSU/cryptopp
+
+[submodule "vendor/zf_log"]
+	path = vendor/zf_log
+	url = https://github.com/wonder-mice/zf_log.git

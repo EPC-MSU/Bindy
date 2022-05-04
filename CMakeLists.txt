@@ -39,7 +39,7 @@ ADD_DEFINITIONS(-DSQLITE_ENABLE_COLUMN_METADATA)
 ADD_DEFINITIONS(-DSQLITE_OMIT_LOAD_EXTENSION)
 
 # generate config.h
-CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/bindy-config.h.in ${CMAKE_CURRENT_BINARY_DIR}/bindy-config.h)
+CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/bindy-config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/bindy-config.h)
 
 # Determine existence of specific tcp flags
 INCLUDE(CheckSymbolExists)

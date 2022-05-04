@@ -130,7 +130,7 @@ bindy_log_helper log_helper; // log-helper initialization
 
 /* * new debug macro
 */
-define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
+#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
 #else
 #define DEBUG(text) { ; }
 #endif

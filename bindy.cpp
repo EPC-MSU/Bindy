@@ -1301,7 +1301,7 @@ void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
         for(const user_t &user : users) {
             assert(user.role == 1 || user.role == 2);
             query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
-            query_stream << (i < users.size()-1 ? "," : ";");
+            query_stream << (i < (short int)(users.size()-1) ? "," : ";");
             i++;
         }
         query_stream << "COMMIT;";
@@ -1348,7 +1348,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	}
 	catch (std::exception)
 	{
-		srand(time(0));
+		srand((unsigned int)time(0));
 	}
 
 	bindy_state_ = new BindyState();
@@ -1384,7 +1384,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 			}
 		}
 
-	} catch (std::runtime_error &e) {
+	} catch (std::runtime_error &) {
 		// skip
 	}
 

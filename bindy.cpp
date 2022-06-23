@@ -15,11 +15,16 @@
 #include <algorithm>
 #include <cassert>
 
+#pragma warning(push)
+#pragma warning(disable:4003)
+
 #include <cryptopp/cryptlib.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/gcm.h>
 #include <cryptopp/socketft.h>
+
+#pragma warning(pop)
 
 #include <zf_log.h>
 #include "tinythread.h"
@@ -520,7 +525,7 @@ Connection::~Connection() {
 void Connection::send_packet_ack(const link_pkt type, std::vector<uint8_t> &content, ack_callback_t &success, ack_callback_t &failure) {
 	ack_id_t request_id = sole::uuid1();
 
-	unsigned long orig_size = content.size();
+	unsigned long orig_size = (unsigned long)content.size();
 	content.resize(content.size() + sizeof(ack_id_t));
 	std::memcpy(content.data() + orig_size, &request_id, sizeof(ack_id_t));
 
@@ -663,7 +668,7 @@ Message Connection::recv_packet() {
 }
 
 unsigned int Connection::buffer_size() {
-	return buffer->size();
+	return (unsigned int)buffer->size();
 }
 
 int Connection::buffer_read(uint8_t *p, int size) {
@@ -1025,7 +1030,7 @@ void socket_thread_function(void *arg) {
 			} else {
 				// we assume that last bytes are message uid
 				ack_id_t msg_id;
-				unsigned long orig_request_size = request.content.size() - sizeof(ack_id_t);
+				unsigned long orig_request_size = (unsigned long)(request.content.size() - sizeof(ack_id_t));
 				std::memcpy(&msg_id, request.content.data() + orig_request_size, sizeof(ack_id_t));
 				request.content.resize(orig_request_size);
 
@@ -1052,7 +1057,7 @@ void socket_thread_function(void *arg) {
 						reply = on_set_master_remote(conn->conn_id, *conn->bindy, request.content);
 					}
 
-					unsigned long orig_reply_size = reply.content.size();
+					unsigned long orig_reply_size = (unsigned long)reply.content.size();
 					reply.content.resize(orig_reply_size + sizeof(ack_id_t));
 					std::memcpy(reply.content.data() + orig_reply_size, &msg_id, sizeof(ack_id_t));
 					conn->send_packet(reply.type, reply.content);

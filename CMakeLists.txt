@@ -54,20 +54,20 @@ SET(SOURCES
         vendor/sqlite/sqlite3.c
         )
 
-INCLUDE_DIRECTORIES(vendor)
+#INCLUDE_DIRECTORIES(vendor)
 
 ADD_LIBRARY(bindy ${SOURCES})
 #treat warnings as errors is on
 
-#target_compile_options(bindy PRIVATE
-#     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-#          -Werror>
-#     $<$<CXX_COMPILER_ID:MSVC>:
-#          /WX>)
+target_compile_options(bindy PRIVATE
+     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
+          -Werror>
+     $<$<CXX_COMPILER_ID:MSVC>:
+          /WX>)
 
 #this is a advised trick to supress some warnings from third-party includes	  
-target_include_directories(bindy PRIVATE vendor/cryptopp)
-target_include_directories(bindy SYSTEM INTERFACE vendor/cryptopp) 		  
+target_include_directories(bindy PRIVATE vendor)
+target_include_directories(bindy SYSTEM INTERFACE vendor) 		  
 
 IF(BUILD_SHARED_LIBS)
     SET_TARGET_PROPERTIES(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")

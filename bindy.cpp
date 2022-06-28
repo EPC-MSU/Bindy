@@ -494,11 +494,13 @@ Connection::~Connection() {
 #else
 		how = SHUT_RDWR;
 #endif
+        const char *e_text; 
 		if(sock) {
 			try {
 				sock->ShutDown(how);
 			}
 			catch(CryptoPP::Socket::Err &e) {
+                e_text = e.what();
 				DEBUG("Socket shutdown failed for reason " << e.what() <<
 					  ". Likely the other side closed connection first.");
 			}
@@ -1343,7 +1345,7 @@ void init_db(sqlite3 *db, const user_vector_t &users = user_vector_t()) {
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
-	port_(49150), is_server_(is_server), is_buffered_(is_buffered), adapter_addr_("") {
+	port_(49150), is_server_(is_server), is_buffered_(is_buffered), padapter_addr_(nullptr){
 	try {
 		std::random_device rd; // may throw if random device is not available
 		if (rd.entropy() == 0) {
@@ -1402,7 +1404,7 @@ Bindy::~Bindy() {
 		if(bindy_state_->bcast_thread != nullptr)
 			bindy_state_->bcast_thread->join();
 	}
-
+    if (padapter_addr_ != nullptr) delete padapter_addr_;    
 	sqlite3_close(bindy_state_->sql_conn);
 
 	delete bindy_state_->main_thread;
@@ -1912,7 +1914,9 @@ conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
 	int conn_id = conn_id_invalid;
 	Socket *sock = nullptr;
 	SuperConnection *sc = nullptr;
-	adapter_addr_ = adapter_addr;
+	if (padapter_addr_ != nullptr) delete padapter_addr_;
+	padapter_addr_ = new(std::string);
+	*padapter_addr_ = adapter_addr;
 	if(addr.empty()) { // use broadcast to connect somewhere
 		tlock lock(bindy_state_->mutex);
 		do {
@@ -2066,7 +2070,7 @@ int Bindy::port() {
 }
 
 std::string Bindy::adapter_addr() {
-	return adapter_addr_;
+	return padapter_addr_ == nullptr ? "" : *padapter_addr_;
 }
 
 void Bindy::add_connection(conn_id_t conn_id, SuperConnection *sconn) {

@@ -15,16 +15,11 @@
 #include <algorithm>
 #include <cassert>
 
-#pragma warning(push)
-#pragma warning(disable:4003)
-
 #include <cryptopp/cryptlib.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/gcm.h>
 #include <cryptopp/socketft.h>
-
-#pragma warning(pop)
 
 #include <zf_log.h>
 #include "tinythread.h"

@@ -92,7 +92,7 @@ public:
 	bindy_log_helper &operator << (size_t number)
 	{
 		if (strlen(_buffer) < STATIC_DEBUG_MES_LEN - 16)
-			sprintf(strchr(_buffer, 0), "%d", number);
+			sprintf(strchr(_buffer, 0), "%ld", number);
 		return *this;
 	}
 
@@ -110,7 +110,7 @@ public:
 		for (int i = 0; i < 32; i++)
 		{
 			if (strlen(_buffer) + 4 > STATIC_DEBUG_MES_LEN) break;
-			sprintf(strchr(_buffer, 0), " %lu", arr[i]);
+			sprintf(strchr(_buffer, 0), " %u", (unsigned int)arr[i]);
 		}
 
 		return *this;
@@ -130,7 +130,7 @@ bindy_log_helper log_helper; // log-helper initialization
 
 /* * new debug macro
 */
-#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
+#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD("%s", log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
 #else
 #define DEBUG(text) { ; }
 #endif

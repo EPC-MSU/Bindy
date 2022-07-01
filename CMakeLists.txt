@@ -62,7 +62,7 @@ ADD_LIBRARY(bindy ${SOURCES})
 if(MSVC)
   target_compile_options(bindy PRIVATE /W3 /WX)
 else()
-  target_compile_options(bindy PRIVATE -Wall -Wextra -Werror)
+  target_compile_options(bindy PRIVATE -Werror)
 endif()
 
 #this is a advised trick to supress some warnings from third-party includes	  

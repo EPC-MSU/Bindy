@@ -489,17 +489,21 @@ Connection::~Connection() {
 #else
 		how = SHUT_RDWR;
 #endif
-        const char *e_text; 
-		if(sock) {
+      		if(sock) {
 			try {
 				sock->ShutDown(how);
 			}
+#if (ZF_LOG_ON_DEBUG)			
 			catch(CryptoPP::Socket::Err &e) {
-                e_text = e.what();
-				DEBUG("Socket shutdown failed for reason " << e.what() <<
+ 				DEBUG("Socket shutdown failed for reason " << e.what() <<
 					  ". Likely the other side closed connection first.");
 			}
+#else
+			catch(...) {
+                             
 		}
+#endif  		
+              }
 	}
 	else if(count() == 1) {
 		if(sock) {
@@ -517,6 +521,7 @@ Connection::~Connection() {
 		delete ack_mutex;
 		delete ack_callbacks;
 	}
+	
 }
 
 void Connection::send_packet_ack(const link_pkt type, std::vector<uint8_t> &content, ack_callback_t &success, ack_callback_t &failure) {
@@ -540,7 +545,7 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 
 	tlock lock(*send_mutex);
 
-	header_t header{static_cast<uint32_t>(content.size()), type};
+	header_t header{static_cast<uint32_t>(content.size()), type, 0, 0, 0};
 	std::string cipher_header, cipher_body, cipher_all,
 		plain_header(reinterpret_cast<const char *>(&header), sizeof(header));
 
@@ -569,12 +574,14 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 
 	cipher_all.append(cipher_header);
 	cipher_all.append(cipher_body);
-	int sent = 0;
 	size_t to_send = cipher_all.length();
-
 	try {
-		sent = sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
+#if (ZF_LOG_ON_DEBUG)	       
+		int sent = sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
 		DEBUG("to send (w/headers): " << to_send << "; sent = " << sent);
+#else
+               sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
+#endif		
 	} catch(CryptoPP::Exception &e) {
 		std::cerr << "Caught exception (net): " << e.what() << std::endl;
 		throw e;
@@ -720,7 +727,7 @@ user_vector_t extract_from_old_config(std::string filename) {
     }
     is.close();
 
-    return std::move(users);
+    return users;
 }
 
 void Connection::initial_exchange(bcast_data_t bcast_data) {
@@ -871,7 +878,7 @@ Message ack_failure_from(const std::string &text) {
 	return Message{link_pkt::PacketAckFailure, {text.begin(), text.end()}};
 }
 
-Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_add_user_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != USERNAME_LENGTH + AES_KEY_LENGTH) {
 		return ack_failure_from("incorrect message length");
 	}
@@ -911,7 +918,7 @@ Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 	}
 }
 
-Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_del_user_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t))
 		return ack_failure_from("incorrect message length");
 
@@ -932,7 +939,7 @@ Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 	}
 }
 
-Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_change_key_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t) + AES_KEY_LENGTH)
 		return ack_failure_from("incorrect message length");
 
@@ -957,7 +964,7 @@ Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 	}
 }
 
-Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_list_users_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != 0) {
 		return ack_failure_from("incorrect message length");
 	}
@@ -989,7 +996,7 @@ Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 	}
 }
 
-Message on_set_master_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_set_master_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t))
 		return ack_failure_from("incorrect message length");
 
@@ -1095,13 +1102,17 @@ ok &= (0 == WSAIoctl(
 ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
 */
 #else
-	unsigned int result;
-
+	
 	int optval = 1; // 1 == enable option
+#ifdef HAVE_TCP_KEEPINTVL	
 	int keepalive_intvl = KEEPINTVL;
+#endif	
+#ifdef HAVE_TCP_KEEPIDLE
 	int keepalive_idle = KEEPIDLE;
+#endif	
+#ifdef HAVE_TCP_KEEPCNT	
 	int keepalive_cnt = KEEPCNT;
-
+#endif
 	ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
 	// platform-specific code here
 #ifdef HAVE_TCP_KEEPINTVL
@@ -1348,7 +1359,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		}
 		srand(rd());
 	}
-	catch (std::exception)
+	catch (...)
 	{
 		srand((unsigned int)time(0));
 	}
@@ -1380,7 +1391,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 			init_db(bindy_state_->sql_conn);
 
 			//if (filename == ":memory:")	
-			for (int i = 0; i < sizeof(predefined_users)/sizeof(predefined_users[0]); i++) {
+			for (int i = 0; i < (int)(sizeof(predefined_users)/sizeof(predefined_users[0])); i++) {
 				const user_t& user = predefined_users[i];
 				add_user_local(user.name, user.key, user.uid, user.role);
 			}
@@ -1500,7 +1511,7 @@ void Bindy::change_key_local(const user_id_t &uid, const aes_key_t &key) {
 }
 
 user_vector_t Bindy::list_users_local() {
-	return list_users_local([](user_t user) { return true; });
+	return list_users_local([](user_t ) { return true; });
 }
 
 user_vector_t Bindy::list_users_local(std::function<bool(user_t &user)> filter) {
@@ -1546,7 +1557,7 @@ user_vector_t Bindy::list_users_local(std::function<bool(user_t &user)> filter) 
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	return std::move(result);
+	return result;
 }
 
 void Bindy::set_master_local(const user_id_t &uid) {
@@ -1615,7 +1626,7 @@ std::future<user_id_t> Bindy::add_user_remote(const conn_id_t conn_id, const std
 	std::memcpy(cursor, key.bytes, AES_KEY_LENGTH);
 	cursor += AES_KEY_LENGTH;
 
-	assert((cursor - content.data()) == estimated);
+	assert((size_t)(cursor - content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<user_id_t>>();
 
@@ -1652,12 +1663,12 @@ std::future<void> Bindy::del_user_remote(const conn_id_t conn_id, const user_id_
 	std::memcpy(cursor, &uid, sizeof(user_id_t));
 	cursor += sizeof(user_id_t);
 
-	assert((cursor - content.data()) == estimated);
+	assert((size_t)(cursor - content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<void>>();
 
 	// Reply handlers
-	ack_callback_t success = [completion](const std::vector<uint8_t> &reply) {
+	ack_callback_t success = [completion](const std::vector<uint8_t> &) {
 		completion->set_value();
 	};
 	ack_callback_t failure = [completion](const std::vector<uint8_t> &reply) {
@@ -1688,12 +1699,12 @@ std::future<void> Bindy::change_key_remote(const conn_id_t conn_id, const user_i
 	std::memcpy(cursor, key.bytes, AES_KEY_LENGTH);
 	cursor += AES_KEY_LENGTH;
 
-	assert((cursor - content.data()) == estimated);
+	assert((size_t)(cursor - content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<void>>();
 
 	// Reply handlers
-	ack_callback_t success = [completion](const std::vector<uint8_t > &reply) {
+	ack_callback_t success = [completion](const std::vector<uint8_t > &) {
 		completion->set_value();
 	};
 	ack_callback_t failure = [completion](const std::vector<uint8_t> &reply) {
@@ -1776,12 +1787,12 @@ std::future<void> Bindy::set_master_remote(const conn_id_t conn_id, const user_i
 	std::memcpy(cursor, &uid, sizeof(user_id_t));
 	cursor += sizeof(user_id_t);
 
-	assert((cursor-content.data()) == estimated);
+	assert((size_t)(cursor-content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<void>>();
 
 	// Reply handlers
-	ack_callback_t success = [completion](const std::vector<uint8_t> &reply) {
+	ack_callback_t success = [completion](const std::vector<uint8_t> &) {
 		completion->set_value();
 	};
 	ack_callback_t failure = [completion](const std::vector<uint8_t> &reply) {

@@ -59,11 +59,11 @@ SET(SOURCES
 ADD_LIBRARY(bindy ${SOURCES})
 #treat warnings as errors is on
 
-target_compile_options(bindy PRIVATE
-     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-          -Werror>
-     $<$<CXX_COMPILER_ID:MSVC>:
-          /WX>)
+if(MSVC)
+  target_compile_options(bindy PRIVATE /W3 /WX)
+else()
+  target_compile_options(bindy PRIVATE -Wall -Wextra -Werror)
+endif()
 
 #this is a advised trick to supress some warnings from third-party includes	  
 target_include_directories(bindy PRIVATE vendor)

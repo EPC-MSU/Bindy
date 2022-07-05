@@ -1209,9 +1209,9 @@ void broadcast_thread_function(void *arg) {
 			socklen_t fromlen = sizeof(from);
 			unsigned int size = recvfrom(bcast_sock, setuprq, sizeof(setuprq), 0, &from, &fromlen);
 			struct sockaddr_in from_in = *(sockaddr_in *) &from;
-			std::string addrbuf;
+			char addrbuf[32];
 			if(from.sa_family == AF_INET) {
-				addrbuf = inet_ntoa(from_in.sin_addr);
+				inet_ntop(AF_INET, &from_in.sin_addr, addrbuf, 32);
 				DEBUG("received broadcast from " << addrbuf << ", size = " << size);
 			}
 			else {

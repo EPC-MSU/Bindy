@@ -60,7 +60,7 @@ ADD_LIBRARY(bindy ${SOURCES})
 #treat warnings as errors is on
 
 if(MSVC)
-  target_compile_options(bindy PRIVATE /W3 /WX)
+  target_compile_options(bindy PRIVATE /W3)
 else()
   target_compile_options(bindy PRIVATE -Wall -Wextra)
 endif()

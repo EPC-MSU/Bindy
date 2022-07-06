@@ -34,10 +34,6 @@ IF(${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD OR ${CMAKE_SYSTEM_NAME} STREQUAL Darwin
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 ENDIF()
 
-# Configure sqlite
-ADD_DEFINITIONS(-DSQLITE_ENABLE_COLUMN_METADATA)
-ADD_DEFINITIONS(-DSQLITE_OMIT_LOAD_EXTENSION)
-
 # generate config.h
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/bindy-config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/bindy-config.h)
 
@@ -51,7 +47,7 @@ SET(SOURCES
         bindy.cpp
         tinythread.cpp
         vendor/sole/sole.cpp
-        vendor/sqlite/sqlite3.c
+        #vendor/sqlite/sqlite3.c
         )
 
 #INCLUDE_DIRECTORIES(vendor)
@@ -60,9 +56,9 @@ ADD_LIBRARY(bindy ${SOURCES})
 #treat warnings as errors is on
 
 if(MSVC)
-  target_compile_options(bindy PRIVATE /W3)
+  target_compile_options(bindy PRIVATE /W3 /WX)
 else()
-  target_compile_options(bindy PRIVATE -Wall -Wextra)
+  target_compile_options(bindy PRIVATE -Wall -Wextra -Werror)
 endif()
 
 #this is a advised trick to supress some warnings from third-party includes	  
@@ -74,6 +70,14 @@ IF(BUILD_SHARED_LIBS)
 ENDIF()
 # set fPIC for static and shared libs
 SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# Configure sqlite
+FUNCTION(CONFIGURE_SQLITE3)
+   ADD_DEFINITIONS(-DSQLITE_ENABLE_COLUMN_METADATA)
+   ADD_DEFINITIONS(-DSQLITE_OMIT_LOAD_EXTENSION)
+   ADD_LIBRARY(sqlite3 STATIC vendor/sqlite/sqlite3.c)
+ENDFUNCTION()
+CONFIGURE_SQLITE3()
 
 FUNCTION(ADD_SUBDIRECTORY_ZF_LOG)
 IF(NOT USE_JOINT_ZFLOG_FROM_ROOT_PROJECT)
@@ -104,7 +108,7 @@ ENDFUNCTION()
 
 CONFIGURE_CRYPTOPP()
 
-TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static zf_log)
+TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static zf_log sqlite3)
 
 IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
     # librt is not static part of glibc in many Linux distros

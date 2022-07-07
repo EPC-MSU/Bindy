@@ -51,7 +51,7 @@ CHECK_SYMBOL_EXISTS(TCP_KEEPCNT netinet/tcp.h HAVE_TCP_KEEPCNT)
 SET(SOURCES
         bindy.cpp
         tinythread.cpp
-        vendor/sole/sole.cpp
+        #vendor/sole/sole.cpp
         # vendor/sqlite/sqlite3.c
         )
 
@@ -84,6 +84,12 @@ FUNCTION(CONFIGURE_SQLITE3)
 ENDFUNCTION()
 CONFIGURE_SQLITE3()
 
+# Configure sqlite
+FUNCTION(CONFIGURE_SOLE)
+   ADD_LIBRARY(sole STATIC vendor/sole/sole.cpp)
+ENDFUNCTION()
+CONFIGURE_SOLE()
+
 FUNCTION(ADD_SUBDIRECTORY_ZF_LOG)
 IF(NOT USE_JOINT_ZFLOG_FROM_ROOT_PROJECT)
     SET(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
@@ -113,7 +119,7 @@ ENDFUNCTION()
 
 CONFIGURE_CRYPTOPP()
 
-TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static zf_log sqlite3)
+TARGET_LINK_LIBRARIES(bindy LINK_PRIVATE cryptopp-static zf_log sqlite3 sole)
 
 IF(${CMAKE_SYSTEM_NAME} STREQUAL Linux OR ${CMAKE_SYSTEM_NAME} STREQUAL FreeBSD)
     # librt is not static part of glibc in many Linux distros

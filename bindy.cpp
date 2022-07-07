@@ -27,6 +27,7 @@
 
 #ifndef _WIN32
    #pragma GCC diagnostic push
+   #pragma GCC diagnostic ignored "-Wmismatched-tags"
    #pragma GCC diagnostic ignored "-Werror"
    #include "sole/sole.hpp"
    #pragma GCC diagnostic pop

@@ -86,7 +86,7 @@ CONFIGURE_SQLITE3()
 
 # Configure sqlite
 FUNCTION(CONFIGURE_SOLE)
-    ADD_LIBRARY(sole STATIC vendor/sole/sole.c)
+    ADD_LIBRARY(sole STATIC vendor/sole/sole.cpp)
 ENDFUNCTION()
 CONFIGURE_SOLE()
 

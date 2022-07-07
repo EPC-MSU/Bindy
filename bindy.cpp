@@ -24,7 +24,15 @@
 #include <zf_log.h>
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
-#include "sole/sole.hpp"
+
+#ifndef _WIN32
+   #pragma GCC diagnostic push
+   #pragma GCC diagnostic ignored "-Werror"
+   #include "sole/sole.hpp"
+   #pragma GCC diagnostic pop
+#else
+   #include "sole/sole.hpp"
+#endif 
 
 
 using CryptoPP::StringSink;

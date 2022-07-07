@@ -53,7 +53,7 @@ static user_t predefined_users[4] = { {
 	{ { { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
 	"test-user-02", { { 116, 151, 7, 58, 45, 200, 115, 165, 199, 104, 143, 162, 208, 160, 23, 119 } }, 2 },
 	{ { { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
-	"test-user-03", { 151, 187, 241, 12, 218, 139, 248, 123, 217, 138, 135, 86, 154, 186, 54, 136 }, 2 },
+	"test-user-03", { { 151, 187, 241, 12, 218, 139, 248, 123, 217, 138, 135, 86, 154, 186, 54, 136 } }, 2 },
 	{ { {114, 111, 111, 116, 45, 117, 115, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
 	"root-user", { { 32, 87, 139, 134, 41, 227, 202, 19, 235, 29, 48, 119, 189, 61, 211, 135 } }, 1 }
 };
@@ -1370,7 +1370,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	bindy_state_->main_thread = nullptr;
 	bindy_state_->bcast_thread = nullptr;
 
-	if(AES_KEY_LENGTH != CryptoPP::AES::DEFAULT_KEYLENGTH) {
+	if(AES_KEY_LENGTH != (size_t)CryptoPP::AES::DEFAULT_KEYLENGTH) {
 		throw std::logic_error("AES misconfiguration, expected AES-128");
 	}
 
@@ -1917,7 +1917,7 @@ void Bindy::connect() {
 }
 
 conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
-	int conn_id = conn_id_invalid;
+	conn_id_t conn_id = conn_id_invalid;
 	Socket *sock = nullptr;
 	SuperConnection *sc = nullptr;
 	if (padapter_addr_ != nullptr) delete padapter_addr_;
@@ -1926,7 +1926,7 @@ conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
 	if(addr.empty()) { // use broadcast to connect somewhere
 		tlock lock(bindy_state_->mutex);
 		do {
-			conn_id = rand();
+			conn_id = (conn_id_t)rand();
 		} while(bindy_state_->connections.count(conn_id) != 0 || conn_id == conn_id_invalid);
 		// uid==0==conn_id_invalid is the single invalid state, so we don't return it
 		try {
@@ -1965,7 +1965,7 @@ conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
 		{
 			tlock lock(bindy_state_->mutex);
 			do {
-				conn_id = rand();
+				conn_id = (conn_id_t)rand();
 			} while(bindy_state_->connections.count(conn_id) != 0 || conn_id == conn_id_invalid);
 			// uid==0==conn_id_invalid is the single invalid state, so we don't return it
 			try {

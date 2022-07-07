@@ -92,7 +92,7 @@ public:
 	bindy_log_helper &operator << (size_t number)
 	{
 		if (strlen(_buffer) < STATIC_DEBUG_MES_LEN - 16)
-			sprintf(strchr(_buffer, 0), "%ld", number);
+			sprintf(strchr(_buffer, 0), "%lu", (unsigned long int)number);
 		return *this;
 	}
 

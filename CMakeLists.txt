@@ -74,13 +74,9 @@ IF(BUILD_SHARED_LIBS)
     SET_TARGET_PROPERTIES(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
 ENDIF()
 
-IF (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-   if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 10.0)
-       ADD_DEFINITIONS(-Wno-stringop-overflow -Wno-mismatched-tags)
-   else()
-	   ADD_DEFINITIONS(-Wno-stringop-overflow)
-   endif()
-ENDIF()	
+ IF (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 10.0)
+     ADD_DEFINITIONS(-Wno-stringop-overflow -Wno-mismatched-tags)
+ENDIF()
 
 
 # set fPIC for static and shared libs

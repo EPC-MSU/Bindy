@@ -26,8 +26,7 @@
 #include "sqlite/sqlite3.h"
 
 #ifdef __GNUC__
-    #pragma GCC system_header
-    //#if __GNUC__ > 10
+      //#if __GNUC__ > 10
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Werror"
         #pragma GCC diagnostic ignored "-Wmismatched-tags"

@@ -32,7 +32,7 @@
         #pragma GCC diagnostic ignored "-Werror"
         #pragma GCC diagnostic ignored "-Wmismatched-tags"
         #pragma GCC diagnostic ignored "-Wstringop-overflow"
-        #pragma GCC system_header
+        //#pragma GCC system_header
     //#endif
 #endif
 

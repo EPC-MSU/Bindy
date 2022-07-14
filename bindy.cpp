@@ -28,7 +28,7 @@
 #ifdef __GNUC__
     #if __GNUC__ > 10
         #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wuninitialized"
+        #pragma GCC diagnostic ignored "-Wmismatched-tags"
         #pragma GCC diagnostic ignored "-Wstringop-overflow"
     #endif
 #endif

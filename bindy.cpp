@@ -26,13 +26,13 @@
 #include "sqlite/sqlite3.h"
 
 #ifdef __GNUC__
-      //#if __GNUC__ > 10
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Werror"
-        #pragma GCC diagnostic ignored "-Wmismatched-tags"
-        #pragma GCC diagnostic ignored "-Wstringop-overflow"
+      #pragma GCC diagnostic ignored "-Werror"
+      #if __GNUC__ > 10
+          #pragma GCC diagnostic push
+          #pragma GCC diagnostic ignored "-Wmismatched-tags"
+          #pragma GCC diagnostic ignored "-Wstringop-overflow"
         //#pragma GCC system_header
-    //#endif
+    #endif
 #endif
 
 #include "sole/sole.hpp"
@@ -2152,8 +2152,8 @@ void Bindy::shutdown_network() {
 
 
 #ifdef __GNUC__
-//#if __GNUC__ > 10
+#if __GNUC__ > 10
 #pragma GCC diagnostic pop
-//#endif
+#endif
 #endif
 

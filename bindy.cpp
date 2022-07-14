@@ -25,19 +25,7 @@
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
 
-#ifdef __GNUC__
-      #pragma GCC diagnostic ignored "-Werror"
-      #if __GNUC__ > 4
-          #pragma GCC diagnostic push
-          #pragma GCC diagnostic ignored "-Wmismatched-tags"
-          #pragma GCC diagnostic ignored "-Wstringop-overflow"
-        //#pragma GCC system_header
-    #endif
-#endif
-
 #include "sole/sole.hpp"
-
-
 
 using CryptoPP::StringSink;
 using CryptoPP::StringSource;
@@ -2151,9 +2139,4 @@ void Bindy::shutdown_network() {
 }; // namespace bindy
 
 
-#ifdef __GNUC__
-#if __GNUC__ > 4
-#pragma GCC diagnostic pop
-#endif
-#endif
 

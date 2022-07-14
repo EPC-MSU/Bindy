@@ -29,9 +29,9 @@
     #pragma GCC system_header
     //#if __GNUC__ > 10
         #pragma GCC diagnostic push
-        //#pragma GCC diagnostic ignored "-Wmismatched-tags"
-        //#pragma GCC diagnostic ignored "-Wstringop-overflow"
         #pragma GCC diagnostic ignored "-Werror"
+        #pragma GCC diagnostic ignored "-Wmismatched-tags"
+        #pragma GCC diagnostic ignored "-Wstringop-overflow"
         #pragma GCC system_header
     //#endif
 #endif

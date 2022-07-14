@@ -25,8 +25,22 @@
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
 
+#ifdef __GNUC__
+    #if __GNUC__ > 10
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wuninitialized"
+        #pragma GCC diagnostic ignored "-Wstringop-overflow"
+    #endif
+#endif
+
 #include "sole/sole.hpp"
- 
+
+#ifdef __GNUC__
+    #if __GNUC__ > 10
+        #pragma GCC diagnostic pop
+     #endif
+#endif
+
 
 
 using CryptoPP::StringSink;

@@ -55,15 +55,13 @@ SET(SOURCES
         # vendor/sqlite/sqlite3.c
         )
 
-#INCLUDE_DIRECTORIES(vendor)
-
 ADD_LIBRARY(bindy ${SOURCES})
 #treat warnings as errors is on
 
 if(MSVC)
   target_compile_options(bindy PRIVATE /W3 /WX)
 else()
-  target_compile_options(bindy PRIVATE -Wall -Wextra -Werror)
+  target_compile_options(bindy PRIVATE -Wall -Wextra -Werror -Wno-unknown-pragmas)
 endif()
 
 #this is a advised trick to supress some warnings from third-party includes	  
@@ -74,9 +72,9 @@ IF(BUILD_SHARED_LIBS)
     SET_TARGET_PROPERTIES(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
 ENDIF()
 
- IF (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 10.0)
-     ADD_DEFINITIONS(-Wno-stringop-overflow -Wno-mismatched-tags)
-ENDIF()
+#IF (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 10.0)
+#     ADD_DEFINITIONS(-Wno-stringop-overflow -Wno-mismatched-tags)
+#ENDIF()
 
 
 # set fPIC for static and shared libs

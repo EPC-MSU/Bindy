@@ -61,7 +61,9 @@ ADD_LIBRARY(bindy ${SOURCES})
 if(MSVC)
   target_compile_options(bindy PRIVATE /W3 /WX)
 else()
-  target_compile_options(bindy PRIVATE -Wall -Wextra -Werror)
+   if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
+      target_compile_options(bindy PRIVATE -Wall -Wextra -Werror)
+   endif()
 endif()
 
 #this is a advised trick to supress some warnings from third-party includes	  
@@ -70,10 +72,6 @@ target_include_directories(bindy SYSTEM INTERFACE vendor)
 
 IF(BUILD_SHARED_LIBS)
     SET_TARGET_PROPERTIES(bindy PROPERTIES COMPILE_DEFINITIONS "BINDY_EXPORTS")
-ENDIF()
-
-IF (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 10.0)
-     ADD_DEFINITIONS(-Wno-stringop-overflow -Wno-mismatched-tags)
 ENDIF()
 
 

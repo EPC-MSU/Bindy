@@ -63,7 +63,7 @@ static user_t predefined_users[4] = { {
  * << stream operator plus ZF_LOG - functions !!!
  */
 
-#if (ZF_LOG_ON_DEBUG)
+#if (ZF_LOG_ENABLED_DEBUG)
 
 #define STATIC_DEBUG_MES_LEN 2048
 
@@ -128,12 +128,12 @@ char bindy_log_helper::_buffer[STATIC_DEBUG_MES_LEN] = ""; // static buffer init
 
 bindy_log_helper log_helper; // log-helper initialization
 
+#endif
+
 /* * new debug macro
 */
-#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD("%s", log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
-#else
-#define DEBUG(text) { ; }
-#endif
+
+#define DEBUG(text) {if (ZF_LOG_ON_DEBUG) {stdout_mutex->lock(); log_helper << text; ZF_LOGD("%s", log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock();}}
 
 /*! TCP KeepAlive option: Keepalive probe send interval in seconds. */
 #define KEEPINTVL 5
@@ -493,7 +493,7 @@ Connection::~Connection() {
 			try {
 				sock->ShutDown(how);
 			}
-#if (ZF_LOG_ON_DEBUG)			
+#if (ZF_LOG_ENABLED_DEBUG)			
 			catch(CryptoPP::Socket::Err &e) {
  				DEBUG("Socket shutdown failed for reason " << e.what() <<
 					  ". Likely the other side closed connection first.");
@@ -576,7 +576,7 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 	cipher_all.append(cipher_body);
 	size_t to_send = cipher_all.length();
 	try {
-#if (ZF_LOG_ON_DEBUG)	       
+#if (ZF_LOG_ENABLED_DEBUG)	       
 		int sent = sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
 		DEBUG("to send (w/headers): " << to_send << "; sent = " << sent);
 #else

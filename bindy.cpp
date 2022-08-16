@@ -1049,7 +1049,7 @@ void socket_thread_function(void *arg) {
 				}
 			}
 		}
-	} catch(std::exception &ex) {
+	} catch(...) {
 		DEBUG("Caught exception, deleting connection...");
 		
 	}
@@ -1421,6 +1421,38 @@ user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &ke
 	sqlite3_finalize(stmt);
 
 	if(cr != SQLITE_DONE) {
+		throw std::runtime_error(sqlite3_errmsg(db));
+	}
+	DEBUG("User created(uid: " << uid.bytes << ")");
+
+	return uid;
+}
+
+user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role) {
+	if (username.length() > USERNAME_LENGTH)
+		throw std::runtime_error("name too long");
+
+	sqlite3 *db = bindy_state_->sql_conn;
+	sqlite3_stmt *stmt;
+
+	std::string query(
+		"INSERT INTO Users VALUES(?, ?, ?, ?);"
+		);
+
+	if (sqlite3_prepare_v2(db, query.data(), (int)query.length(), &stmt, 0) != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		throw std::runtime_error(sqlite3_errmsg(db));
+	}
+
+	sqlite3_bind_blob(stmt, 1, &uid, sizeof(user_id_t), SQLITE_TRANSIENT);
+	sqlite3_bind_text(stmt, 2, username.data(), static_cast<int>(username.size()), SQLITE_TRANSIENT);
+	sqlite3_bind_int(stmt, 3, role);
+	sqlite3_bind_blob(stmt, 4, key.bytes, AES_KEY_LENGTH, SQLITE_TRANSIENT);
+
+	int cr = sqlite3_step(stmt);
+	sqlite3_finalize(stmt);
+
+	if (cr != SQLITE_DONE) {
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 	DEBUG("User created(uid: " << uid.bytes << ")");

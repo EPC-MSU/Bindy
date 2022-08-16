@@ -127,6 +127,7 @@ public:
 	*	Sets the callback function which will receive unstructured data from the peers.
 	*	@param[in] datasink Pointer to the callback function which will process the data.
 	*/
+	user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role);
 	user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid);
 	user_id_t add_user_local(const std::string &username, const aes_key_t &key);
 	void del_user_local(const user_id_t &uuid);
@@ -175,9 +176,10 @@ public:
 	/*!
 	*	Client method; each call to this function opens new socket to the host and establishes its own encrypted channel.
 	*	@param[in] addr The IPv4 address or hostname to connect to.
-	*	\return The handle to the created connection. Equals "conn_id_invalid" in case connection could not be established.
+	*	@param[in] adapter_addr The IPv4 address of network adapter to bind to.
+	*	\return The handle to the created connection.Equals "conn_id_invalid" in case connection could not be established.
 	*/
-	conn_id_t connect (std::string addr);
+	conn_id_t connect(std::string addr, std::string adapter_addr = "");
 
 	/*!
 	*	Disconnects the channel identified by connection uid.
@@ -198,6 +200,12 @@ public:
 	*	\return Boolean value, true is this class is server.
 	*/
 	bool is_server();
+
+	/*!
+	*	Returns the network adapter address which is used by Bindy to listen for connections.
+	*	\return Adapter address.
+	*/
+	std::string adapter_addr();
 
 	/*!
 	*	Returns the port number which is used by Bindy to listen for connections.

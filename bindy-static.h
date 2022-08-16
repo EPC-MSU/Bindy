@@ -258,7 +258,7 @@ private:
 	const int port_;
 	const bool is_server_;
 	const bool is_buffered_;
-
+	std::string * padapter_addr_;
 	/*!
 	* Main thread of the Bindy class. Listens on an opened socket, accepts connections and spawns socket threads.
 	*/

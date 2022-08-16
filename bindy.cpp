@@ -24,8 +24,8 @@
 
 #include "tinythread.h"
 #include "sqlite/sqlite3.h"
-#include "sole/sole.hpp"
 
+#include "sole/sole.hpp"
 
 using CryptoPP::StringSink;
 using CryptoPP::StringSource;
@@ -46,15 +46,26 @@ using CryptoPP::Socket;
 
 
 namespace bindy {
-static tthread::mutex *stdout_mutex = new tthread::mutex();
+
+static tthread::mutex *stdout_mutex = new tthread::mutex();														   
+
+static user_t predefined_users[4] = { { 
+	{ { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+	"test-user-01", { { 95, 130, 29, 163, 182, 24, 32, 62, 32, 121, 37, 138, 164, 165, 117, 178 } }, 2 },
+	{ { { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+	"test-user-02", { { 116, 151, 7, 58, 45, 200, 115, 165, 199, 104, 143, 162, 208, 160, 23, 119 } }, 2 },
+	{ { { 116, 101, 115, 116, 45, 117, 115, 101, 114, 45, 48, 51, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+	"test-user-03", { { 151, 187, 241, 12, 218, 139, 248, 123, 217, 138, 135, 86, 154, 186, 54, 136 } }, 2 },
+	{ { {114, 111, 111, 116, 45, 117, 115, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } },
+	"root-user", { { 32, 87, 139, 134, 41, 227, 202, 19, 235, 29, 48, 119, 189, 61, 211, 135 } }, 1 }
+};
 
 /**
  * class to help use the DEBUG macro together with
  * << stream operator plus ZF_LOG - functions !!!
  */
 
-
-#if (ZF_LOG_ON_DEBUG)
+#if (ZF_LOG_ENABLED_DEBUG)
 
 #define STATIC_DEBUG_MES_LEN 2048
 
@@ -83,7 +94,7 @@ public:
 	bindy_log_helper &operator << (size_t number)
 	{
 		if (strlen(_buffer) < STATIC_DEBUG_MES_LEN - 16)
-			sprintf(strchr(_buffer, 0), "%d", number);
+			sprintf(strchr(_buffer, 0), "%lu", (unsigned long int)number);
 		return *this;
 	}
 
@@ -101,7 +112,7 @@ public:
 		for (int i = 0; i < 32; i++)
 		{
 			if (strlen(_buffer) + 4 > STATIC_DEBUG_MES_LEN) break;
-			sprintf(strchr(_buffer, 0), " %lu", arr[i]);
+			sprintf(strchr(_buffer, 0), " %u", (unsigned int)arr[i]);
 		}
 
 		return *this;
@@ -119,13 +130,12 @@ char bindy_log_helper::_buffer[STATIC_DEBUG_MES_LEN] = ""; // static buffer init
 
 bindy_log_helper log_helper; // log-helper initialization
 
-/* * new debug macro
-*/
-#define DEBUG(text) { stdout_mutex->lock(); log_helper << text;  ZF_LOGD(log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock(); }
-#else
-#define DEBUG(text) { ; }
 #endif
 
+/* * new debug macro
+*/
+
+#define DEBUG(text) {if (ZF_LOG_ON_DEBUG) {stdout_mutex->lock(); log_helper << text; ZF_LOGD("%s", log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock();}}
 
 /*! TCP KeepAlive option: Keepalive probe send interval in seconds. */
 #define KEEPINTVL 5
@@ -236,9 +246,12 @@ public:
 	BindyState():
 	    main_thread(nullptr),
 	    bcast_thread(nullptr),
-	    sql_conn(nullptr)
-    {}
+	    sql_conn(nullptr) 
+        {}
 
+	~BindyState() {
+	}
+	
 	BindyState(const BindyState &) = delete;
 
 	BindyState &operator=(const BindyState &) = delete;
@@ -251,11 +264,10 @@ public:
 	{
 		tlock lock(global_mutex);
 		if(map.count(conn_id) == 0) {
-			map[conn_id] = 1;
-			mutexes[conn_id] = new tthread::mutex();
-		} else {
-            ++map[conn_id];
-        }
+		   map[conn_id] = 0;
+		}
+		++map[conn_id];
+		mutexes[conn_id] = new tthread::mutex();
 	}
 
 	Countable(Countable const &) = delete;
@@ -264,14 +276,12 @@ public:
 
 	virtual ~Countable() {
 		tlock lock(global_mutex);
-		if (map.count(conn_id)) {
-			if (map[conn_id] > 1) {
-				--map[conn_id];
-			} else {
-				map.erase(conn_id);
-				delete mutexes[conn_id];
-				mutexes.erase(conn_id);
-			}
+		if(map.count(conn_id) == 1 && map[conn_id] > 1) {
+			--map[conn_id];
+		} else {
+			map.erase(conn_id);
+			delete mutexes[conn_id];
+			mutexes.erase(conn_id);
 		}
 	}
 
@@ -464,15 +474,21 @@ Connection::~Connection() {
 #else
 		how = SHUT_RDWR;
 #endif
-		if(sock) {
+      		if(sock) {
 			try {
 				sock->ShutDown(how);
 			}
+#if (ZF_LOG_ENABLED_DEBUG)			
 			catch(CryptoPP::Socket::Err &e) {
-				DEBUG("Socket shutdown failed for reason " << e.what() <<
+ 				DEBUG("Socket shutdown failed for reason " << e.what() <<
 					  ". Likely the other side closed connection first.");
 			}
+#else
+			catch(...) {
+                             
 		}
+#endif  		
+              }
 	}
 	else if(count() == 1) {
 		if(sock) {
@@ -490,12 +506,13 @@ Connection::~Connection() {
 		delete ack_mutex;
 		delete ack_callbacks;
 	}
+	
 }
 
 void Connection::send_packet_ack(const link_pkt type, std::vector<uint8_t> &content, ack_callback_t &success, ack_callback_t &failure) {
 	ack_id_t request_id = sole::uuid1();
 
-	unsigned long orig_size = content.size();
+	unsigned long orig_size = (unsigned long)content.size();
 	content.resize(content.size() + sizeof(ack_id_t));
 	std::memcpy(content.data() + orig_size, &request_id, sizeof(ack_id_t));
 
@@ -513,7 +530,7 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 
 	tlock lock(*send_mutex);
 
-	header_t header{static_cast<uint32_t>(content.size()), type};
+	header_t header{static_cast<uint32_t>(content.size()), type, 0, 0, 0};
 	std::string cipher_header, cipher_body, cipher_all,
 		plain_header(reinterpret_cast<const char *>(&header), sizeof(header));
 
@@ -542,12 +559,14 @@ void Connection::send_packet(link_pkt type, const std::vector<uint8_t> content) 
 
 	cipher_all.append(cipher_header);
 	cipher_all.append(cipher_body);
-	int sent = 0;
 	size_t to_send = cipher_all.length();
-
 	try {
-		sent = sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
+#if (ZF_LOG_ENABLED_DEBUG)	       
+		int sent = sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
 		DEBUG("to send (w/headers): " << to_send << "; sent = " << sent);
+#else
+               sock->Send(reinterpret_cast<const uint8_t *>(cipher_all.data()), to_send, 0);
+#endif		
 	} catch(CryptoPP::Exception &e) {
 		std::cerr << "Caught exception (net): " << e.what() << " Thread Id: " << std::this_thread::get_id() << std::endl;
 
@@ -639,7 +658,7 @@ Message Connection::recv_packet() {
 }
 
 unsigned int Connection::buffer_size() {
-	return buffer->size();
+	return (unsigned int)buffer->size();
 }
 
 int Connection::buffer_read(uint8_t *p, int size) {
@@ -693,13 +712,10 @@ user_vector_t extract_from_old_config(std::string filename) {
 		count++;
 	}
 	is.close();
-
-	return std::move(users);
+    return users;
 }
 
 void Connection::initial_exchange(bcast_data_t bcast_data) {
-//	std::string remote_nodename;
-
 	bool use_bcast = (sock == nullptr);
 
 	if(!inits_connect) { // this party accepts the connection
@@ -843,7 +859,7 @@ Message ack_failure_from(const std::string &text) {
 	return Message{link_pkt::PacketAckFailure, {text.begin(), text.end()}};
 }
 
-Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_add_user_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != USERNAME_LENGTH + AES_KEY_LENGTH) {
 		return ack_failure_from("incorrect message length");
 	}
@@ -883,7 +899,7 @@ Message on_add_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 	}
 }
 
-Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_del_user_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t))
 		return ack_failure_from("incorrect message length");
 
@@ -904,7 +920,7 @@ Message on_del_user_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t>
 	}
 }
 
-Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_change_key_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t) + AES_KEY_LENGTH)
 		return ack_failure_from("incorrect message length");
 
@@ -929,7 +945,7 @@ Message on_change_key_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 	}
 }
 
-Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_list_users_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != 0) {
 		return ack_failure_from("incorrect message length");
 	}
@@ -961,7 +977,7 @@ Message on_list_users_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_
 	}
 }
 
-Message on_set_master_remote(conn_id_t conn_id, Bindy &bindy, std::vector<uint8_t> &request) {
+Message on_set_master_remote(conn_id_t, Bindy &bindy, std::vector<uint8_t> &request) {
 	if(request.size() != sizeof(user_id_t))
 		return ack_failure_from("incorrect message length");
 
@@ -999,7 +1015,7 @@ void socket_thread_function(void *arg) {
 			} else {
 				// we assume that last bytes are message uid
 				ack_id_t msg_id;
-				unsigned long orig_request_size = request.content.size() - sizeof(ack_id_t);
+				unsigned long orig_request_size = (unsigned long)(request.content.size() - sizeof(ack_id_t));
 				std::memcpy(&msg_id, request.content.data() + orig_request_size, sizeof(ack_id_t));
 				request.content.resize(orig_request_size);
 
@@ -1026,7 +1042,7 @@ void socket_thread_function(void *arg) {
 						reply = on_set_master_remote(conn->conn_id, *conn->bindy, request.content);
 					}
 
-					unsigned long orig_reply_size = reply.content.size();
+					unsigned long orig_reply_size = (unsigned long)reply.content.size();
 					reply.content.resize(orig_reply_size + sizeof(ack_id_t));
 					std::memcpy(reply.content.data() + orig_reply_size, &msg_id, sizeof(ack_id_t));
 					conn->send_packet(reply.type, reply.content);
@@ -1069,13 +1085,17 @@ ok &= (0 == WSAIoctl(
 ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
 */
 #else
-	unsigned int result;
-
+	
 	int optval = 1; // 1 == enable option
+#ifdef HAVE_TCP_KEEPINTVL	
 	int keepalive_intvl = KEEPINTVL;
+#endif	
+#ifdef HAVE_TCP_KEEPIDLE
 	int keepalive_idle = KEEPIDLE;
+#endif	
+#ifdef HAVE_TCP_KEEPCNT	
 	int keepalive_cnt = KEEPCNT;
-
+#endif
 	ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
 	// TODO non-portable line of code
 #ifdef __linux__
@@ -1166,9 +1186,9 @@ void broadcast_thread_function(void *arg) {
 			socklen_t fromlen = sizeof(from);
 			unsigned int size = recvfrom(bcast_sock, setuprq, sizeof(setuprq), 0, &from, &fromlen);
 			struct sockaddr_in from_in = *(sockaddr_in *) &from;
-			std::string addrbuf;
+			char addrbuf[32];
 			if(from.sa_family == AF_INET) {
-				addrbuf = inet_ntoa(from_in.sin_addr);
+				inet_ntop(AF_INET, &from_in.sin_addr, addrbuf, 32);
 				DEBUG("received broadcast from " << addrbuf << ", size = " << size);
 			}
 			else {
@@ -1263,20 +1283,18 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 	for(std::string &s : static_statements) {
 		query_stream << s;
 	}
-
-	if(users.size() > 0) {
-		query_stream << "BEGIN;";
-		query_stream << "INSERT INTO Users VALUES ";
-		short int i = 0;
-		for(const user_t &user : users) {
-			assert(user.role == 1 || user.role == 2);
-			query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
-			query_stream << (i < users.size()-1 ? "," : ";");
-			i++;
-		}
-		query_stream << "COMMIT;";
-	}
-
+    if(users.size() > 0) {
+        query_stream << "BEGIN;";
+        query_stream << "INSERT INTO Users VALUES ";
+        short int i = 0;
+        for(const user_t &user : users) {
+            assert(user.role == 1 || user.role == 2);
+            query_stream << "(?, ?, " << (user.role==1 ? "1" : "2") << ", ?)";
+            query_stream << (i < (short int)(users.size()-1) ? "," : ";");
+            i++;
+        }
+        query_stream << "COMMIT;";
+    }
 	// FIXME: performs full copy
 	auto query = query_stream.str();
 	const char *left = query.data();
@@ -1310,7 +1328,7 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
-	port_(49150), is_server_(is_server), is_buffered_(is_buffered) {
+	port_(49150), is_server_(is_server), is_buffered_(is_buffered), padapter_addr_(nullptr){
 	try {
 		std::random_device rd; // may throw if random device is not available
 		if (rd.entropy() == 0) {
@@ -1318,9 +1336,9 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		}
 		srand(rd());
 	}
-	catch (std::exception)
+	catch (...)
 	{
-		srand(time(0));
+		srand((unsigned int)time(0));
 	}
 		
 	bindy_state_ = new BindyState();
@@ -1329,7 +1347,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	bindy_state_->main_thread = nullptr;
 	bindy_state_->bcast_thread = nullptr;
 
-	if(AES_KEY_LENGTH != CryptoPP::AES::DEFAULT_KEYLENGTH) {
+	if(AES_KEY_LENGTH != (size_t)CryptoPP::AES::DEFAULT_KEYLENGTH) {
 		throw std::logic_error("AES misconfiguration, expected AES-128");
 	}
 
@@ -1338,10 +1356,24 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 		sqlite3_close(bindy_state_->sql_conn);
 		throw std::runtime_error("cannot open sqlite");
 	}
-	try {
-		init_db(bindy_state_->sql_conn);
-	} catch (std::runtime_error &e) {
-		// skip
+	try {			
+
+		if (sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE /*| SQLITE_OPEN_CREATE*/, nullptr) != SQLITE_OK) {
+			sqlite3_close(bindy_state_->sql_conn);
+			throw std::runtime_error("cannot open sqlite");
+		}
+		else
+		{
+			init_db(bindy_state_->sql_conn);
+
+			//if (filename == ":memory:")	
+			for (int i = 0; i < (int)(sizeof(predefined_users)/sizeof(predefined_users[0])); i++) {
+				const user_t& user = predefined_users[i];
+				add_user_local(user.name, user.key, user.uid, user.role);
+			}
+		}
+
+	} catch (std::runtime_error &) {
 	}
 };
 
@@ -1352,7 +1384,7 @@ Bindy::~Bindy() {
 		if(bindy_state_->bcast_thread != nullptr)
 			bindy_state_->bcast_thread->join();
 	}
-
+    if (padapter_addr_ != nullptr) delete padapter_addr_;    
 	sqlite3_close(bindy_state_->sql_conn);
 
 	delete bindy_state_->main_thread;
@@ -1448,7 +1480,7 @@ void Bindy::change_key_local(const user_id_t &uid, const aes_key_t &key) {
 }
 
 user_vector_t Bindy::list_users_local() {
-	return list_users_local([](user_t user) { return true; });
+	return list_users_local([](user_t ) { return true; });
 }
 
 user_vector_t Bindy::list_users_local(std::function<bool(user_t &user)> filter) {
@@ -1494,7 +1526,7 @@ user_vector_t Bindy::list_users_local(std::function<bool(user_t &user)> filter) 
 		throw std::runtime_error(sqlite3_errmsg(db));
 	}
 
-	return std::move(result);
+	return result;
 }
 
 void Bindy::set_master_local(const user_id_t &uid) {
@@ -1563,7 +1595,7 @@ std::future<user_id_t> Bindy::add_user_remote(const conn_id_t conn_id, const std
 	std::memcpy(cursor, key.bytes, AES_KEY_LENGTH);
 	cursor += AES_KEY_LENGTH;
 
-	assert((cursor - content.data()) == estimated);
+	assert((size_t)(cursor - content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<user_id_t>>();
 
@@ -1600,12 +1632,12 @@ std::future<void> Bindy::del_user_remote(const conn_id_t conn_id, const user_id_
 	std::memcpy(cursor, &uid, sizeof(user_id_t));
 	cursor += sizeof(user_id_t);
 
-	assert((cursor - content.data()) == estimated);
+	assert((size_t)(cursor - content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<void>>();
 
 	// Reply handlers
-	ack_callback_t success = [completion](const std::vector<uint8_t> &reply) {
+	ack_callback_t success = [completion](const std::vector<uint8_t> &) {
 		completion->set_value();
 	};
 	ack_callback_t failure = [completion](const std::vector<uint8_t> &reply) {
@@ -1636,12 +1668,12 @@ std::future<void> Bindy::change_key_remote(const conn_id_t conn_id, const user_i
 	std::memcpy(cursor, key.bytes, AES_KEY_LENGTH);
 	cursor += AES_KEY_LENGTH;
 
-	assert((cursor - content.data()) == estimated);
+	assert((size_t)(cursor - content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<void>>();
 
 	// Reply handlers
-	ack_callback_t success = [completion](const std::vector<uint8_t > &reply) {
+	ack_callback_t success = [completion](const std::vector<uint8_t > &) {
 		completion->set_value();
 	};
 	ack_callback_t failure = [completion](const std::vector<uint8_t> &reply) {
@@ -1724,12 +1756,12 @@ std::future<void> Bindy::set_master_remote(const conn_id_t conn_id, const user_i
 	std::memcpy(cursor, &uid, sizeof(user_id_t));
 	cursor += sizeof(user_id_t);
 
-	assert((cursor-content.data()) == estimated);
+	assert((size_t)(cursor-content.data()) == estimated);
 
 	auto completion = std::make_shared<std::promise<void>>();
 
 	// Reply handlers
-	ack_callback_t success = [completion](const std::vector<uint8_t> &reply) {
+	ack_callback_t success = [completion](const std::vector<uint8_t> &) {
 		completion->set_value();
 	};
 	ack_callback_t failure = [completion](const std::vector<uint8_t> &reply) {
@@ -1853,14 +1885,17 @@ void Bindy::connect() {
 	}
 }
 
-conn_id_t Bindy::connect(std::string addr) {
-	int conn_id = conn_id_invalid;
+conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
+	conn_id_t conn_id = conn_id_invalid;
 	Socket *sock = nullptr;
 	SuperConnection *sc = nullptr;
+	if (padapter_addr_ != nullptr) delete padapter_addr_;
+	padapter_addr_ = new(std::string);
+	*padapter_addr_ = adapter_addr;
 	if(addr.empty()) { // use broadcast to connect somewhere
 		tlock lock(bindy_state_->mutex);
 		do {
-			conn_id = rand();
+			conn_id = (conn_id_t)rand();
 		} while(bindy_state_->connections.count(conn_id) != 0 || conn_id == conn_id_invalid);
 		// uid==0==conn_id_invalid is the single invalid state, so we don't return it
 		try {
@@ -1898,7 +1933,7 @@ conn_id_t Bindy::connect(std::string addr) {
 		{
 			tlock lock(bindy_state_->mutex);
 			do {
-				conn_id = rand();
+				conn_id = (conn_id_t)rand();
 			} while(bindy_state_->connections.count(conn_id) != 0 || conn_id == conn_id_invalid);
 			// uid==0==conn_id_invalid is the single invalid state, so we don't return it
 			try {
@@ -2008,6 +2043,10 @@ int Bindy::port() {
 	return port_;
 }
 
+std::string Bindy::adapter_addr() {
+	return padapter_addr_ == nullptr ? "" : *padapter_addr_;
+}
+
 void Bindy::add_connection(conn_id_t conn_id, SuperConnection *sconn) {
 	tlock lock(bindy_state_->mutex);
 	bindy_state_->connections[conn_id] = sconn;
@@ -2066,3 +2105,6 @@ void Bindy::shutdown_network() {
 }
 
 }; // namespace bindy
+
+
+

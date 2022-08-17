@@ -1058,57 +1058,58 @@ void socket_thread_function(void *arg) {
 	}
 }
 
-bool set_socket_keepalive_nodelay(Socket *s) {
-	bool ok = true;
+ bool set_socket_keepalive_nodelay(Socket *s) {
+      bool ok = true;
 
 #if defined (WIN32) || defined(WIN64)
-	/*
-const char optval = 1;
-tcp_keepalive lpvInBuffer;
-int cbInBuffer = sizeof(lpvInBuffer);
-lpvInBuffer.onoff = 1;
-lpvInBuffer.keepalivetime = KEEPIDLE;
-lpvInBuffer.keepaliveinterval = KEEPINTVL;
-//	lpvInBuffer.keepalivecount = KEEPCNT;  There is no such thing in windows. Stupid windows.
-ok &= (0 == WSAIoctl(
-  *s,              // descriptor identifying a socket
-  SIO_KEEPALIVE_VALS,                  // dwIoControlCode
-  &lpvInBuffer,    // pointer to tcp_keepalive struct
-  cbInBuffer,      // length of input buffer
-  NULL,         // output buffer
-  0,       // size of output buffer
-  NULL,    // number of bytes returned
-  NULL,   // OVERLAPPED structure
-  NULL  // completion routine
-) );
-ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
-*/
+        /*
+        const char optval = 1;
+        tcp_keepalive lpvInBuffer;
+        int cbInBuffer = sizeof(lpvInBuffer);
+        lpvInBuffer.onoff = 1;
+        lpvInBuffer.keepalivetime = KEEPIDLE;
+        lpvInBuffer.keepaliveinterval = KEEPINTVL;
+        //	lpvInBuffer.keepalivecount = KEEPCNT;  There is no such thing in windows. Stupid windows.
+        ok &= (0 == WSAIoctl(
+        *s,              // descriptor identifying a socket
+        SIO_KEEPALIVE_VALS,                  // dwIoControlCode
+        &lpvInBuffer,    // pointer to tcp_keepalive struct
+        cbInBuffer,      // length of input buffer
+        NULL,         // output buffer
+        0,       // size of output buffer
+        NULL,    // number of bytes returned
+        NULL,   // OVERLAPPED structure
+        NULL  // completion routine
+        ) );
+        ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
+        */
 #else
-	
-	int optval = 1; // 1 == enable option
-#ifdef HAVE_TCP_KEEPINTVL	
-	int keepalive_intvl = KEEPINTVL;
-#endif	
-#ifdef HAVE_TCP_KEEPIDLE
-	int keepalive_idle = KEEPIDLE;
-#endif	
-#ifdef HAVE_TCP_KEEPCNT	
-	int keepalive_cnt = KEEPCNT;
+        unsigned int result;
+
+        int optval = 1; // 1 == enable option
+        int keepalive_intvl = KEEPINTVL;
+        int keepalive_idle = KEEPIDLE;
+        int keepalive_cnt = KEEPCNT;
+
+        ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
+        // platform-specific code here
+#ifdef HAVE_TCP_KEEPINTVL
+        ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)));
 #endif
-	ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
-	// TODO non-portable line of code
-#ifdef __linux__
-	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_intvl, sizeof(int)));
-	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_idle, sizeof(int)));
-	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
+#ifdef HAVE_TCP_KEEPIDLE
+        ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_idle, sizeof(int)));
+#endif
+#ifdef HAVE_TCP_KEEPCNT
+        ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_cnt, sizeof(int)));
 #endif
 
-	// Also disable Nagle, because we want faster response and each bindy packet is a complete packet that should be wrapped in TCP and sent right away
-	optval = 1;
-	ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)));
+        // Also disable Nagle, because we want faster response and each bindy packet is a complete packet that should be wrapped in TCP and sent right away
+        optval = 1;
+        ok &= (0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)));
 #endif
-	return ok;
+        return ok;
 }
+
 
 void main_thread_function(void *arg) {
 	Bindy *bindy = (Bindy *) arg;

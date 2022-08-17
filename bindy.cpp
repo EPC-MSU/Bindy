@@ -65,7 +65,6 @@ static user_t predefined_users[4] = { {
  * << stream operator plus ZF_LOG - functions !!!
  */
 
-#if (ZF_LOG_ENABLED_DEBUG)
 
 #define STATIC_DEBUG_MES_LEN 2048
 
@@ -130,11 +129,9 @@ char bindy_log_helper::_buffer[STATIC_DEBUG_MES_LEN] = ""; // static buffer init
 
 bindy_log_helper log_helper; // log-helper initialization
 
-#endif
-
 /* * new debug macro
 */
-
+// to satisfy multiple variants of Bindy using
 #define DEBUG(text) {if (ZF_LOG_ON_DEBUG) {stdout_mutex->lock(); log_helper << text; ZF_LOGD("%s", log_helper.buffer()); log_helper.clear(); stdout_mutex->unlock();}}
 
 /*! TCP KeepAlive option: Keepalive probe send interval in seconds. */

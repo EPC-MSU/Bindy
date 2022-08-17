@@ -1400,12 +1400,15 @@ user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &ke
 user_id_t Bindy::add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid) {
 	if(username.length() > USERNAME_LENGTH)
 		throw std::runtime_error("name too long");
+    
+    auto users = list_users_local();
+
 
 	sqlite3 *db = bindy_state_->sql_conn;
 	sqlite3_stmt *stmt;
 
 	std::string query(
-		"INSERT INTO Users VALUES(?, ?, 2, ?);"
+		"INSERT OR IGNORE INTO Users VALUES(?, ?, 2, ?);"
 	);
 
 	if(sqlite3_prepare_v2(db, query.data(), (int) query.length(), &stmt, 0) != SQLITE_OK) {

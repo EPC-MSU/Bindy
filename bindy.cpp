@@ -7,6 +7,8 @@
 
 
 #include "bindy-static.h"
+#include "bindy-config.h"
+
 
 #include <fstream>
 #include <cstring>

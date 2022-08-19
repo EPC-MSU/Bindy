@@ -1352,28 +1352,19 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	}
 
     if(filename.empty()) DEBUG("Opening temporary in-memory keyfile");
-	if(sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK) {
+	if(sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK){ // ok if filename == "" but no ok if filenamt does not exist
 		sqlite3_close(bindy_state_->sql_conn);
 		throw std::runtime_error("cannot open sqlite");
 	}
-	try {			
-
-		if (sqlite3_open_v2(filename.data(), &(bindy_state_->sql_conn), SQLITE_OPEN_READWRITE /*| SQLITE_OPEN_CREATE*/, nullptr) != SQLITE_OK) {
-			sqlite3_close(bindy_state_->sql_conn);
-			throw std::runtime_error("cannot open sqlite");
-		}
-		else
-		{
-			init_db(bindy_state_->sql_conn);
-
-			//if (filename == ":memory:")	
-			for (int i = 0; i < (int)(sizeof(predefined_users)/sizeof(predefined_users[0])); i++) {
-				const user_t& user = predefined_users[i];
-				add_user_local(user.name, user.key, user.uid, user.role);
-			}
-		}
-
-	} catch (std::runtime_error &) {
+    try{
+        init_db(bindy_state_->sql_conn);// db tables creation, if have already created (normal keyfile provided) - exception will be generated but to be processed just here 
+                                        // no users will be added in case of excepion    
+        for (int i = 0; i < (int)(sizeof(predefined_users) / sizeof(predefined_users[0])); i++) {
+            const user_t& user = predefined_users[i];
+            add_user_local(user.name, user.key, user.uid, user.role);
+        }
+    }
+    catch (std::runtime_error &) {
 	}
 };
 

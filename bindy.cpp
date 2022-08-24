@@ -1084,13 +1084,16 @@ void socket_thread_function(void *arg) {
         ok &= ( 0 == setsockopt(*s, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) );
         */
 #else
-        unsigned int result;
-
         int optval = 1; // 1 == enable option
+#ifdef HAVE_TCP_KEEPINTVL
         int keepalive_intvl = KEEPINTVL;
+#endif  
+#ifdef HAVE_TCP_KEEPIDLE      
         int keepalive_idle = KEEPIDLE;
+#endif        
+#ifdef HAVE_TCP_KEEPCNT
         int keepalive_cnt = KEEPCNT;
-
+#endif
         ok &= (0 == setsockopt(*s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(int)));
         // platform-specific code here
 #ifdef HAVE_TCP_KEEPINTVL

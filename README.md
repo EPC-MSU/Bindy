@@ -36,14 +36,19 @@ Special cryptopp location can be specified with `CRYPTOPP_PATH` (for library) an
 
 Cloning the project
 --------------------------------
+
+```
    git clone https://github.com/EPC-MSU/Bindy
+```
 
 The project uses  submodules and has several dev-branches, so:
 
+```
    git submodule update 
    git switch <branch>
    git submodule update --init --recursive
    git submodule update --recursive
+```
 
 Building the library and example
 --------------------------------

@@ -1,6 +1,6 @@
 #include "bindy-static.h"
 
-void handler_function(bindy::conn_id_t conn_id, std::vector<uint8_t> data) {
+void handler_function(bindy::conn_id_t, std::vector<uint8_t> data) {
 	std::string text(data.begin(), data.end());
 	std::cout << text << std::endl;
 	std::cout.flush();
@@ -13,9 +13,8 @@ void fail (const char* message) {
 
 int main (int argc, char *argv[])
 {
-	bindy::BindyNetworkInitializer initializer;
-
-	std::unique_ptr<bindy::Bindy> bindy;
+    bindy::BindyNetworkInitializer initializer;
+    std::unique_ptr<bindy::Bindy> bindy;
 	if (argc == 4) { // I am a Client
 		try {
 			bindy.reset(new bindy::Bindy(argv[1], false, false));

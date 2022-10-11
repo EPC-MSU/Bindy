@@ -44,6 +44,7 @@ Cloning the project
 The project uses  submodules and has several dev-branches, so:
 
 ```
+   cd Bindy
    git submodule update 
    git switch <branch>
    git submodule update --init --recursive

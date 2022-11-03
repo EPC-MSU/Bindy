@@ -1331,8 +1331,9 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 
 Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
-	port_(49150), is_server_(is_server), is_buffered_(is_buffered), padapter_addr_(nullptr){
+	port_(49150), is_server_(is_server), is_buffered_(is_buffered){
 	try {
+        padapter_addr_ = new std::string();
 		std::random_device rd; // may throw if random device is not available
 		if (rd.entropy() == 0) {
 			throw std::exception();
@@ -1378,7 +1379,7 @@ Bindy::~Bindy() {
 		if(bindy_state_->bcast_thread != nullptr)
 			bindy_state_->bcast_thread->join();
 	}
-    if (padapter_addr_ != nullptr) delete padapter_addr_;    
+    delete padapter_addr_;    
 	sqlite3_close(bindy_state_->sql_conn);
 
 	delete bindy_state_->main_thread;
@@ -1918,8 +1919,6 @@ conn_id_t Bindy::connect(std::string addr, std::string adapter_addr) {
 	conn_id_t conn_id = conn_id_invalid;
 	Socket *sock = nullptr;
 	SuperConnection *sc = nullptr;
-	if (padapter_addr_ != nullptr) delete padapter_addr_;
-	padapter_addr_ = new(std::string);
 	*padapter_addr_ = adapter_addr;
 	if(addr.empty()) { // use broadcast to connect somewhere
 		tlock lock(bindy_state_->mutex);

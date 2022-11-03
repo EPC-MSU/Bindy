@@ -2072,7 +2072,7 @@ int Bindy::port() {
 }
 
 std::string Bindy::adapter_addr() {
-	return padapter_addr_ == nullptr ? "" : *padapter_addr_;
+	return *padapter_addr_;
 }
 
 void Bindy::add_connection(conn_id_t conn_id, SuperConnection *sconn) {

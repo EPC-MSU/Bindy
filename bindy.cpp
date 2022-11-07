@@ -1122,7 +1122,8 @@ void main_thread_function(void *arg) {
 		DEBUG("Creating TCP listen socket...");
 		listen_sock.Create(SOCK_STREAM);
 		set_socket_reuseaddr(&listen_sock);
-		listen_sock.Bind(bindy->port(), NULL);
+        const char* adapter_addr = (bindy->adapter_addr().empty() ? NULL : bindy->adapter_addr().c_str());
+		listen_sock.Bind(bindy->port(), adapter_addr);
 	} catch(std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 		throw e;
@@ -1173,7 +1174,8 @@ void broadcast_thread_function(void *arg) {
 		DEBUG("Creating UDP listen socket...");
 		bcast_sock.Create(SOCK_DGRAM);
 		set_socket_broadcast(&bcast_sock);
-		bcast_sock.Bind(bindy->port(), NULL);
+        const char *adapter_addr = (bindy->adapter_addr().empty() ? NULL : bindy->adapter_addr().c_str());
+		bcast_sock.Bind(bindy->port(), adapter_addr);
 	} catch(std::exception &e) {
 		std::cerr << "Caught exception: " << e.what() << std::endl;
 		throw e;
@@ -1333,7 +1335,7 @@ Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
 	:
 	port_(49150), is_server_(is_server), is_buffered_(is_buffered){
 	try {
-        padapter_addr_ = new std::string();
+        padapter_addr_ = new std::string("");
 		std::random_device rd; // may throw if random device is not available
 		if (rd.entropy() == 0) {
 			throw std::exception();

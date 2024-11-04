@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     bindy::Bindy *bindy;
 	if (argc == 4) { // I am a Client
 		try {
-			bindy.reset(new bindy::Bindy(argv[1], false, false));
+			bindy = bindy_create_new(argv[1], false, false);
 		} catch (...) {
 			fail("Error initializing bindy. Please check if configuration file exists.");
 		}
@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 		std::cout << "CLIENT started." << std::endl;
 		bindy::conn_id_t conn_id;
 		try {
-			conn_id = bindy->connect(argv[2]);
+			conn_id = bindy_connect_client(bindy, argv[2]);
 		} catch (...) {
 			fail("Error establishing connection to remote address.");
 		}
@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
 			// Send user message
 			std::string text = std::string(argv[3]);
 			std::vector<uint8_t> data = std::vector<uint8_t>(text.begin(), text.end());
-			bindy->send_data(conn_id, data);
+			bindy_send_data(bindy, conn_id, data);
 			bindy::sleep_ms(1000); // let the server process the data
 		} catch (...) {
 			fail("Error sending data.");

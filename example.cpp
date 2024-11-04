@@ -17,7 +17,7 @@ void handler_function(bindy::conn_id_t, std::vector<uint8_t> data) {
 int main(int argc, char* argv[]) {
     bindy::BindyNetworkInitializer initializer;
 
-    std::unique_ptr<bindy::Bindy> bindy;
+    bindy::Bindy *bindy;
 	if (argc == 4) { // I am a Client
 		try {
 			bindy.reset(new bindy::Bindy(argv[1], false, false));
@@ -42,16 +42,17 @@ int main(int argc, char* argv[]) {
 		} catch (...) {
 			fail("Error sending data.");
 		}
-	} else if (argc == 2) { // I am a Server
+	} else if (argc == 2) {
+		// I am a Server
 		try {
-			bindy.reset(new bindy::Bindy(argv[1], true, true));
+			bindy = bindy_create_new(argv[1], true, true);
 		} catch (...) {
 			fail("Error initializing bindy. Please check if configuration file exists.");
 		}
 
 		try {
-			bindy->connect();
-			bindy->set_handler(&handler_function);
+			connect_server(bindy);
+			bindy_set_handler(bindy, &handler_function);
 		} catch (...) {
 			fail("Error establishing listening connection.");
 		}

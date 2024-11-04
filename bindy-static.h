@@ -366,6 +366,10 @@ extern "C"
 	void bindy_send_data(Bindy *bindy, conn_id_t conn_id, std::vector<uint8_t> data) {
 		bindy->send_data(conn_id, data);
 	}
+
+	void bindy_set_handler(Bindy *bindy, void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
+		bindy->set_handler(datasink);
+	}
 }
 
 

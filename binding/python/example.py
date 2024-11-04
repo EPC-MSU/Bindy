@@ -1,4 +1,4 @@
-from libbindy import Bindy
+from bindy import Bindy
 
 
 def main() -> None:

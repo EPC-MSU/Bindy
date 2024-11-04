@@ -344,11 +344,11 @@ public:
 
 extern "C"
 {
-	Bindy * bindy_create_new(std::string filename, bool is_active_node, bool is_buffered) {
+	Bindy BINDY_EXPORT * bindy_create_new(std::string filename, bool is_active_node, bool is_buffered) {
 		return new Bindy(filename, is_active_node, is_buffered);
 	}
 
-	void bindy_delete(Bindy *bindy) {
+	void BINDY_EXPORT bindy_delete(Bindy *bindy) {
 		if (bindy) {
 			delete bindy;
 			bindy = nullptr;

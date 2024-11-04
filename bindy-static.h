@@ -341,8 +341,6 @@ public:
 	~BindyNetworkInitializer() { Bindy::shutdown_network(); }
 };
 
-};
-
 
 extern "C"
 {
@@ -369,6 +367,9 @@ extern "C"
 		bindy->send_data(conn_id, data);
 	}
 }
+
+
+};
 
 
 #endif // BINDY_STATIC_H

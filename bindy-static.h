@@ -171,7 +171,7 @@ public:
 	/*!
 	*	Server method, starts listening on a socket in background and returns.
 	*/
-	void connect ();
+	void connect();
 
 	/*!
 	*	Client method; each call to this function opens new socket to the host and establishes its own encrypted channel.
@@ -342,5 +342,33 @@ public:
 };
 
 };
+
+
+extern "C"
+{
+	Bindy * bindy_create_new(std::string filename, bool is_active_node, bool is_buffered) {
+		return new Bindy(filename, is_active_node, is_buffered);
+	}
+
+	void bindy_delete(Bindy *bindy) {
+		if (bindy) {
+			delete bindy;
+			bindy = nullptr;
+		}
+	}
+
+	void bindy_connect(Bindy *bindy) {
+		bindy->connect();
+	}
+
+	conn_id_t bindy_connect(Bindy *bindy, std::string addr, std::string adapter_addr = "") {
+		return bindy->connect(addr, adapter_addr);
+	}
+
+	void bindy_send_data(Bindy *bindy, conn_id_t conn_id, std::vector<uint8_t> data) {
+		bindy->send_data(conn_id, data);
+	}
+}
+
 
 #endif // BINDY_STATIC_H

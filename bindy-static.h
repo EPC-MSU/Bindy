@@ -355,11 +355,11 @@ extern "C"
 		}
 	}
 
-	void bindy_connect(Bindy *bindy) {
+	void bindy_connect_server(Bindy *bindy) {
 		bindy->connect();
 	}
 
-	conn_id_t bindy_connect(Bindy *bindy, std::string addr, std::string adapter_addr = "") {
+	conn_id_t bindy_connect_client(Bindy *bindy, std::string addr, std::string adapter_addr = "") {
 		return bindy->connect(addr, adapter_addr);
 	}
 

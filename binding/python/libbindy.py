@@ -19,7 +19,7 @@ def specify_argument_types(lib: ctypes.CDLL) -> None:
 
     lib.bindy_send_data.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p]
 
-    lib.bindy_set_handler.argtypes = [ctypes.c_void_p, ctypes.CFUNCTYPE]
+    # lib.bindy_set_handler.argtypes = [ctypes.c_void_p, ctypes.CFUNCTYPE]
 
 
 lib = load_library()

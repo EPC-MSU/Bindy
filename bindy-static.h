@@ -355,19 +355,19 @@ extern "C"
 		}
 	}
 
-	conn_id_t bindy_connect_client(Bindy *bindy, std::string addr, std::string adapter_addr = "") {
+	conn_id_t BINDY_EXPORT bindy_connect_client(Bindy *bindy, std::string addr, std::string adapter_addr = "") {
 		return bindy->connect(addr, adapter_addr);
 	}
 
-	void bindy_connect_server(Bindy *bindy) {
+	void BINDY_EXPORT bindy_connect_server(Bindy *bindy) {
 		bindy->connect();
 	}
 
-	void bindy_send_data(Bindy *bindy, conn_id_t conn_id, std::vector<uint8_t> data) {
+	void BINDY_EXPORT bindy_send_data(Bindy *bindy, conn_id_t conn_id, std::vector<uint8_t> data) {
 		bindy->send_data(conn_id, data);
 	}
 
-	void bindy_set_handler(Bindy *bindy, void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
+	void BINDY_EXPORT bindy_set_handler(Bindy *bindy, void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
 		bindy->set_handler(datasink);
 	}
 }

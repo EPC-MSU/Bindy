@@ -59,14 +59,19 @@ void run_server(char *argv[]) {
     std::cout << "SERVER started.\n";
 
     while (true) {
-        bindy::conn_id_t *connections = nullptr;
-        size_t connections_number = bindy::bindy_list_connections(bindy_ptr, &connections);
+        const size_t size = 10;
+        bindy::conn_id_t connections[size];
+        size_t connections_number = bindy::bindy_list_connections(bindy_ptr, connections, size);
 
         const int buffer_size = 1024;
         uint8_t buffer[buffer_size + 1];
         for (int i = 0; i < connections_number; i++) {
+            if (i >= size) {
+                break;
+            }
+
             bindy::conn_id_t conn_id = connections[i];
-            int len = bindy::bindy_read(bindy_ptr, conn_id, buffer, buffer_size);
+            int len = bindy::bindy_read_data(bindy_ptr, conn_id, buffer, buffer_size);
             if (len > 0) {
                 buffer[len] = 0;
                 struct in_addr client_addr = bindy::bindy_get_ip_address(bindy_ptr, conn_id);
@@ -75,10 +80,6 @@ void run_server(char *argv[]) {
             }
         }
 
-        if (connections) {
-            delete[] connections;
-            connections = nullptr;
-        }
         bindy::sleep_ms(10);
     }
 }

@@ -1,7 +1,7 @@
 import argparse
 import sys
 import time
-from bindy import Bindy, initialize_network, shutdown_network
+from libbindy import Bindy, initialize_network, shutdown_network
 
 
 def run_client(filename: str, address: str, message: str) -> None:
@@ -33,6 +33,7 @@ def main() -> None:
 
     finally:
         shutdown_network()
+
 
 def parse_arguments() -> None:
     parser = argparse.ArgumentParser()

@@ -410,6 +410,15 @@ extern "C"
     }
 
     /*!
+    * Returns number of active connections.
+    * @param[in] bindy_ptr Pointer to Bindy node.
+    * \return Number of active connections.
+    */
+    BINDY_EXPORT size_t bindy_get_connections_number(Bindy *bindy_ptr) {
+        return bindy_ptr->list_connections().size();
+    }
+
+    /*!
     * Returns amount of data in the buffer of connection identified by "conn_id". Used only with buffered mode.
     * @param[in] bindy_ptr Pointer to Bindy node.
     * @param[in] conn_id Connection identifier.
@@ -457,19 +466,22 @@ extern "C"
     /*!
     * Returns the list of active connections.
     * @param[in] bindy_ptr Pointer to Bindy node.
-    * @param[out] connections The array of connection identifiers.
+    * @param[out] connections The pointer to array of connection identifiers.
+    * @param[in] size Array size.
     * \return The number of connection identifiers.
     */
-    BINDY_EXPORT size_t bindy_list_connections(Bindy *bindy_ptr, conn_id_t **connections) {
+    BINDY_EXPORT size_t bindy_list_connections(Bindy *bindy_ptr, conn_id_t *connections, size_t size) {
         std::list<conn_id_t> connection_list = bindy_ptr->list_connections();
-        size_t connections_number = connection_list.size();
-        *connections = new conn_id_t [connections_number];
         size_t i = 0;
         for (std::list<conn_id_t>::iterator it = connection_list.begin(); it != connection_list.end(); it++) {
-            (*connections)[i] = *it;
+            if (i >= size) {
+                break;
+            }
+
+            connections[i] = *it;
             i++;
         }
-        return connections_number;
+        return connection_list.size();
     }
 
     /*!
@@ -481,7 +493,7 @@ extern "C"
     * @param[in] size Amount of bytes requested.
     * \return Amount of bytes read.
     */
-    BINDY_EXPORT int bindy_read(Bindy *bindy_ptr, conn_id_t conn_id, uint8_t *ptr, int size) {
+    BINDY_EXPORT int bindy_read_data(Bindy *bindy_ptr, conn_id_t conn_id, uint8_t *ptr, int size) {
         return bindy_ptr->read(conn_id, ptr, size);
     }
 

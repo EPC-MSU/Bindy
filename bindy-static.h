@@ -186,14 +186,14 @@ public:
 	*	Call to this function does not affect other connections to the same host.
 	*	@param[in] conn_id Connection identifier.
 	*/
-	void disconnect (conn_id_t conn_id);
+	void disconnect(conn_id_t conn_id);
 
 	/*!
 	*	Sends data into the established connection.
 	*	@param[in] conn_id Connection identifier.
 	*	@param[in] data The data to send.
 	*/
-	void send_data (conn_id_t conn_id, std::vector<uint8_t> data);
+	void send_data(conn_id_t conn_id, std::vector<uint8_t> data);
 
 	/*!
 	*	Function to test whether this instance of Bindy class acts as a server (accepts connections).
@@ -227,7 +227,7 @@ public:
 	*	@param[in] size Amount of bytes requested.
 	*	\return Amount of bytes read.
 	*/
-	int read (conn_id_t conn_id, uint8_t * p, int size);
+	int read(conn_id_t conn_id, uint8_t * p, int size);
 
 	/*!
 	*	Returns amount of data in the buffer of connection identified by "conn_id".
@@ -235,7 +235,7 @@ public:
 	*	@param[in] conn_id Connection identifier.
 	*	\return Size of data in buffer in bytes.
 	*/
-	int get_data_size (conn_id_t);
+	int get_data_size(conn_id_t);
 
 	/*!
 	*	Returns the ip address of the peer of connection identified by "conn_id".
@@ -344,31 +344,66 @@ public:
 
 extern "C"
 {
-	Bindy BINDY_EXPORT * bindy_create_new(std::string filename, bool is_active_node, bool is_buffered) {
-		return new Bindy(filename, is_active_node, is_buffered);
+	BINDY_EXPORT Bindy * bindy_create_new(const char *filename, bool is_active_node, bool is_buffered) {
+		std::string filename_str(filename);
+		return new Bindy(filename_str, is_active_node, is_buffered);
 	}
 
-	void BINDY_EXPORT bindy_delete(Bindy *bindy) {
+	BINDY_EXPORT void bindy_delete(Bindy *bindy) {
 		if (bindy) {
 			delete bindy;
 			bindy = nullptr;
 		}
 	}
 
-	conn_id_t BINDY_EXPORT bindy_connect_client(Bindy *bindy, std::string addr, std::string adapter_addr = "") {
+	BINDY_EXPORT char * bindy_adapter_address(Bindy *bindy) {
+		std::string adapter_addr = bindy->adapter_addr();
+		char *adapter_address = new char [adapter_addr.length() + 1];
+  		std::strcpy(adapter_address, adapter_addr.c_str());
+		return adapter_address;
+	}
+
+	BINDY_EXPORT conn_id_t bindy_connect_client(Bindy *bindy, const char *address, const char *adapter_address = "") {
+		std::string addr(address);
+		std::string adapter_addr(adapter_address);
 		return bindy->connect(addr, adapter_addr);
 	}
 
-	void BINDY_EXPORT bindy_connect_server(Bindy *bindy) {
+	BINDY_EXPORT void bindy_connect_server(Bindy *bindy) {
 		bindy->connect();
 	}
 
-	void BINDY_EXPORT bindy_send_data(Bindy *bindy, conn_id_t conn_id, std::vector<uint8_t> data) {
-		bindy->send_data(conn_id, data);
+	BINDY_EXPORT void bindy_disconnect(Bindy *bindy, conn_id_t conn_id) {
+		bindy->disconnect(conn_id);
 	}
 
-	void BINDY_EXPORT bindy_set_handler(Bindy *bindy, void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
+	BINDY_EXPORT int bindy_get_data_size(Bindy *bindy, conn_id_t conn_id) {
+		return bindy->get_data_size(conn_id);
+	}
+
+	BINDY_EXPORT void bindy_initialize_network() {
+		Bindy::initialize_network();
+	}
+
+	BINDY_EXPORT bool bindy_is_server(Bindy *bindy) {
+		return bindy->is_server();
+	}
+
+	BINDY_EXPORT int bindy_port(Bindy *bindy) {
+		return bindy->port();
+	}
+
+	BINDY_EXPORT void bindy_send_data(Bindy *bindy, conn_id_t conn_id, uint8_t *data, size_t length) {
+		std::vector<uint8_t> data_vector(data, data + length);
+		bindy->send_data(conn_id, data_vector);
+	}
+
+	BINDY_EXPORT void bindy_set_handler(Bindy *bindy, void(*datasink)(conn_id_t conn_id, std::vector<uint8_t> data)) {
 		bindy->set_handler(datasink);
+	}
+
+	BINDY_EXPORT void bindy_shutdown_network() {
+		Bindy::shutdown_network();
 	}
 }
 

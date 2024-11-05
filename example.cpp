@@ -35,9 +35,7 @@ int main(int argc, char* argv[]) {
 
 		try {
 			// Send user message
-			std::string text = std::string(argv[3]);
-			std::vector<uint8_t> data = std::vector<uint8_t>(text.begin(), text.end());
-			bindy::bindy_send_data(bindy, conn_id, data);
+			bindy::bindy_send_data(bindy, conn_id, (uint8_t *)argv[3], strlen(argv[3]));
 			bindy::sleep_ms(1000); // let the server process the data
 		} catch (...) {
 			fail("Error sending data.");
@@ -52,13 +50,14 @@ int main(int argc, char* argv[]) {
 
 		try {
 			bindy::bindy_connect_server(bindy);
-			bindy::bindy_set_handler(bindy, &handler_function);
+			bindy->set_handler(&handler_function);
 		} catch (...) {
 			fail("Error establishing listening connection.");
 		}
 		std::cout << "SERVER started." << std::endl;
 
 		while (true) {
+			/*
 			std::list<bindy::conn_id_t> c = bindy->list_connections();
 			std::list<bindy::conn_id_t>::iterator it;
 			const int buflen = 1024;
@@ -75,6 +74,7 @@ int main(int argc, char* argv[]) {
 					std::cout.flush();
 				}
 			}
+			*/
 			bindy::sleep_ms(10);
 		}
 	} else { // I don't even

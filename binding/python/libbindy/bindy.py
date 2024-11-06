@@ -27,7 +27,7 @@ class Bindy:
 
         self._bindy = lib.bindy_create_new(ctypes.c_char_p(filename.encode("utf-8")), is_active_node, is_buffered)
 
-    def __del__ (self) -> None:
+    def __del__(self) -> None:
         lib.bindy_delete(self._bindy)
 
     def connect_client(self, server_address: str, adapter_address: str = "") -> None:
@@ -75,25 +75,26 @@ class Bindy:
         """
         :return: True if the node is a server.
         """
-        
+
         return lib.bindy_is_server(self._bindy)
 
     def list_connections(self) -> None:
         connections_number = lib.bindy_get_connections_number(self._bindy)
         if connections_number == 0:
             return
-        
-        buffer = (c_uint32 * connections_number)()
+
+        buffer = (ctypes.c_uint32 * connections_number)()
         lib.bindy_list_connections(self._bindy, buffer, connections_number)
-    
+
     def read_data(self, connection_id: int) -> None:
         """
         :param connection_id: connection identifier.
         """
 
         buffer_size = 1024
-        buffer = (c_uint8 * buffer_size)()
+        buffer = (ctypes.c_uint8 * buffer_size)()
         real_length = lib.bindy_read_data(self._bindy, connection_id, buffer, buffer_size)
+        print(real_length)
 
     def send_data(self, connection_id: int, data: List[int]) -> None:
         """

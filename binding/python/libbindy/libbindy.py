@@ -36,7 +36,8 @@ def specify_argument_types(lib: ctypes.CDLL) -> None:
     lib.bindy_is_server.argtypes = [ctypes.c_void_p]
     lib.bindy_is_server.restype = ctypes.c_bool
 
-    lib.bindy_list_connections.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_uint32)), ctypes.c_size_t]
+    lib.bindy_list_connections.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_uint32)),
+                                           ctypes.c_size_t]
     lib.bindy_list_connections.restype = ctypes.c_size_t
 
     lib.bindy_read_data.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint8), ctypes.c_int]

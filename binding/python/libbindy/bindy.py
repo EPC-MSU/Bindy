@@ -67,7 +67,7 @@ class Bindy:
     def get_ip_address(self, connection_id: int) -> str:
         """
         :param connection_id: connection identifier.
-        :return: IP address of connection.
+        :return: IP address of the peer of connection identified by given connection identifier.
         """
 
         return lib.bindy_get_ip_address(self._bindy, connection_id).decode("utf-8")

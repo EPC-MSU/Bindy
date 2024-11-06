@@ -432,7 +432,7 @@ extern "C"
     * Returns the IP address of the peer of connection identified by "conn_id".
     * @param[in] bindy_ptr Pointer to Bindy node.
     * @param[in] conn_id Connection identifier.
-    * \return IP address.
+    * \return IP address of the peer.
     */
     BINDY_EXPORT char * bindy_get_ip_address(Bindy *bindy_ptr, conn_id_t conn_id) {
         return inet_ntoa(bindy_ptr->get_ip(conn_id));

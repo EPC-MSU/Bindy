@@ -4,15 +4,23 @@ import time
 from libbindy import Bindy, initialize_network, shutdown_network
 
 
+def print_main_info(bindy_obj: Bindy) -> None:
+    print("Is server:", bindy_obj.is_server())
+    print("Port:", bindy_obj.get_port())
+    print("Adapter address:", bindy_obj.get_adapter_address())
+
+
 def run_client(filename: str, address: str, message: str) -> None:
     bindy_obj = Bindy(filename, False, False)
     bindy_obj.connect_client(address)
+    print_main_info(bindy_obj)
 
 
 def run_server(filename: str) -> None:
     bindy_obj = Bindy(filename, True, True)
     bindy_obj.connect_server()
     print("Server started")
+    print_main_info(bindy_obj)
     while True:
         print("Wait...")
         time.sleep(1)
@@ -25,14 +33,10 @@ def main() -> None:
     message = parsed_args.message
 
     initialize_network()
-    try:
-        if address is None:
-            run_server(filename)
-        else:
-            run_client(filename, address, message)
-
-    finally:
-        shutdown_network()
+    if address is None:
+        run_server(filename)
+    else:
+        run_client(filename, address, message)
 
 
 def parse_arguments() -> None:

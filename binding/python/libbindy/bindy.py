@@ -54,7 +54,7 @@ class Bindy:
         :return: adapter address.
         """
 
-        return lib.bindy_get_adapter_address(self._bindy)
+        return lib.bindy_get_adapter_address(self._bindy).decode("utf-8")
 
     def get_data_size(self, connection_id: int) -> int:
         """

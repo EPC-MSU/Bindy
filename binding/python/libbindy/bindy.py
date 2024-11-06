@@ -64,6 +64,14 @@ class Bindy:
 
         return lib.bindy_get_data_size(self._bindy, connection_id)
 
+    def get_ip_address(self, connection_id: int) -> str:
+        """
+        :param connection_id: connection identifier.
+        :return: IP address of connection.
+        """
+
+        return lib.bindy_get_ip_address(self._bindy, connection_id).decode("utf-8")
+
     def get_port(self) -> int:
         """
         :return: port number.
@@ -78,13 +86,10 @@ class Bindy:
 
         return lib.bindy_is_server(self._bindy)
 
-    def list_connections(self) -> None:
-        connections_number = lib.bindy_get_connections_number(self._bindy)
-        if connections_number == 0:
-            return
-
-        buffer = (ctypes.c_uint32 * connections_number)()
-        lib.bindy_list_connections(self._bindy, buffer, connections_number)
+    def list_connections(self) -> List[int]:
+        buffer = ctypes.POINTER(ctypes.c_uint32)()
+        connections_number = lib.bindy_list_connections(self._bindy, ctypes.byref(buffer))
+        return [buffer[i] for i in range(connections_number)]
 
     def read_data(self, connection_id: int) -> None:
         """

@@ -432,10 +432,10 @@ extern "C"
     * Returns the IP address of the peer of connection identified by "conn_id".
     * @param[in] bindy_ptr Pointer to Bindy node.
     * @param[in] conn_id Connection identifier.
-    * \return Structure which contains peer address.
+    * \return IP address.
     */
-    BINDY_EXPORT in_addr bindy_get_ip_address(Bindy *bindy_ptr, conn_id_t conn_id) {
-        return bindy_ptr->get_ip(conn_id);
+    BINDY_EXPORT char * bindy_get_ip_address(Bindy *bindy_ptr, conn_id_t conn_id) {
+        return inet_ntoa(bindy_ptr->get_ip(conn_id));
     }
 
     /*!
@@ -467,21 +467,18 @@ extern "C"
     * Returns the list of active connections.
     * @param[in] bindy_ptr Pointer to Bindy node.
     * @param[out] connections The pointer to array of connection identifiers.
-    * @param[in] size Array size.
-    * \return The number of connection identifiers.
+    * \return Number of active connections.
     */
-    BINDY_EXPORT size_t bindy_list_connections(Bindy *bindy_ptr, conn_id_t *connections, size_t size) {
+    BINDY_EXPORT size_t bindy_list_connections(Bindy *bindy_ptr, conn_id_t **connections) {
         std::list<conn_id_t> connection_list = bindy_ptr->list_connections();
+        size_t connections_number = connection_list.size();
+        *connections = new conn_id_t [connections_number];
         size_t i = 0;
         for (std::list<conn_id_t>::iterator it = connection_list.begin(); it != connection_list.end(); it++) {
-            if (i >= size) {
-                break;
-            }
-
-            connections[i] = *it;
+            (*connections)[i] = *it;
             i++;
         }
-        return connection_list.size();
+        return connections_number;
     }
 
     /*!

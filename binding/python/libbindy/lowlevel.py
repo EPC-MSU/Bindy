@@ -1,8 +1,54 @@
 import ctypes
+import ctypes.util
+import platform
+import struct
+from enum import auto, Enum
+from typing import Optional
+
+
+class Platform(Enum):
+    DEBIAN = auto()
+    WIN32 = auto()
+    WIN64 = auto()
+
+
+def detect_platform() -> Optional[Platform]:
+    """
+    :return: platform name.
+    """
+
+    if platform.system() == "Windows":
+        return Platform.WIN32 if 8 * struct.calcsize("P") == 32 else Platform.WIN64
+
+    if platform.system() == "Linux":
+        return Platform.DEBIAN
+
+    return None
 
 
 def load_library() -> ctypes.CDLL:
-    lib = ctypes.cdll.LoadLibrary("bindy.dll")
+    """
+    :return: C library.
+    """
+    
+    current_platform = detect_platform()
+    if current_platform in (Platform.WIN32, Platform.WIN64):
+        lib_name = ctypes.util.find_library("bindy.dll")
+        return ctypes.cdll.LoadLibrary(lib_name)
+
+    if current_platform is Platform.DEBIAN:
+        return ctypes.cdll.LoadLibrary("libuiobgige.so")
+        
+    raise ValueError("Unknown platform")
+
+
+def open_library() -> ctypes.CDLL:
+    """
+    :return: C library.
+    """
+
+    lib = load_library()
+    specify_argument_types(lib)
     return lib
 
 
@@ -50,5 +96,4 @@ def specify_argument_types(lib: ctypes.CDLL) -> None:
     lib.bindy_shutdown_network.argtypes = []
 
 
-library = load_library()
-specify_argument_types(library)
+library = open_library()

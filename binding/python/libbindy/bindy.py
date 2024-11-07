@@ -1,6 +1,6 @@
 import ctypes
 from typing import List, Optional
-from .libbindy import library as lib
+from .lowlevel import library as lib
 
 
 def initialize_network() -> None:

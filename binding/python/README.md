@@ -6,7 +6,7 @@ Python binding для библиотеки **Bindy**.
 
 1. Укажите корректную версию **bindy** в поле **version** в файле **setup.py**.
 
-2. Соберите библиотеку **Bindy** для debian, win32, win64.
+2. Соберите библиотеки **Bindy** для debian, win32, win64.
 
 3. Собранные библиотеки положите в папки **bindy/debian**, **bindy/win32**, **bindy/win64**.
 

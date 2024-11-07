@@ -1,4 +1,4 @@
-# libbindy
+# bindy
 
 Python binding для библиотеки **Bindy**.
 

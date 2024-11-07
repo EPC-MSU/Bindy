@@ -108,11 +108,9 @@ class Bindy:
 
     def send_message(self, connection_id: int, message: str) -> None:
         """
-        :param connection_id: connection identifier.
-        :param message:
+        :param connection_id: connection identifier to send message to;
+        :param message: text message to send.
         """
 
-        print([ord(c) for c in message])
-        data = ctypes.cast([ord(c) for c in message], ctypes.POINTER(ctypes.c_uint8))
-        print(data, ctypes.sizeof(data))
+        data = (ctypes.c_uint8 * len(message)) (*[ord(symbol) for symbol in message])
         lib.bindy_send_data(self._bindy, connection_id, data, len(message))

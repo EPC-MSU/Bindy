@@ -497,8 +497,9 @@ extern "C"
     /*!
     * Sends data into the established connection.
     * @param[in] bindy_ptr Pointer to Bindy node.
-    * @param[in] conn_id Connection identifier.
+    * @param[in] conn_id Connection identifier to send data to.
     * @param[in] data The data to send.
+    * @param[in] length Data array size.
     */
     BINDY_EXPORT void bindy_send_data(Bindy *bindy_ptr, conn_id_t conn_id, uint8_t *data, size_t length) {
         std::vector<uint8_t> data_vector(data, data + length);

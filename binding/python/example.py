@@ -13,6 +13,7 @@ def print_main_info(bindy_obj: Bindy) -> None:
 def run_client(filename: str, address: str, message: str) -> None:
     bindy_obj = Bindy(filename, False, False)
     connection_id = bindy_obj.connect_client(address)
+    print("Client started")
     print_main_info(bindy_obj)
     bindy_obj.send_message(connection_id, message)
     time.sleep(1)
@@ -25,10 +26,9 @@ def run_server(filename: str) -> None:
     print_main_info(bindy_obj)
 
     while True:
-        print("Wait...")
         for connection_id in bindy_obj.list_connections():
             print("Connected client from ", bindy_obj.get_ip_address(connection_id))
-        time.sleep(1)
+        time.sleep(0.01)
 
 
 def main() -> None:

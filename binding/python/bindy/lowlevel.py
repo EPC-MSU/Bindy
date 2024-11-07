@@ -44,15 +44,15 @@ def load_library() -> ctypes.CDLL:
     """
     :return: C library.
     """
-    
+
     current_platform = detect_platform()
     library_name = {Platform.DEBIAN: "libbindy.so",
-                     Platform.WIN32: "bindy.dll",
-                     Platform.WIN64: "bindy.dll"}.get(current_platform, None)
+                    Platform.WIN32: "bindy.dll",
+                    Platform.WIN64: "bindy.dll"}.get(current_platform, None)
     if library_name:
         lib_path = get_full_path(os.path.join(current_platform.name.lower(), library_name))
         return ctypes.cdll.LoadLibrary(lib_path)
-    
+
     raise ValueError("Unknown platform")
 
 

@@ -112,9 +112,9 @@ class Bindy:
             read_data_length = lib.bindy_read_data(self._bindy, connection_id, buffer, buffer_size)
             if read_data_length == 0:
                 break
-        
+
             data.extend([chr(buffer[i]) for i in range(read_data_length)])
-        
+
         return None if not data else "".join(data)
 
     def send_message(self, connection_id: int, message: str) -> None:
@@ -123,5 +123,5 @@ class Bindy:
         :param message: text message to send.
         """
 
-        data = (ctypes.c_uint8 * len(message)) (*[ord(symbol) for symbol in message])
+        data = (ctypes.c_uint8 * len(message))(*[ord(symbol) for symbol in message])
         lib.bindy_send_data(self._bindy, connection_id, data, len(message))

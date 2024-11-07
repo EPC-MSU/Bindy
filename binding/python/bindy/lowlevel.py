@@ -1,6 +1,7 @@
 import ctypes
 import ctypes.util
 import platform
+import os
 import struct
 from enum import auto, Enum
 from typing import Optional
@@ -30,19 +31,28 @@ def detect_platform() -> Optional[Platform]:
     return None
 
 
+def get_full_path(name: str) -> str:
+    """
+    :param name: file name.
+    :return: full path to file.
+    """
+
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+
+
 def load_library() -> ctypes.CDLL:
     """
     :return: C library.
     """
     
     current_platform = detect_platform()
-    if current_platform in (Platform.WIN32, Platform.WIN64):
-        lib_name = ctypes.util.find_library("bindy.dll")
-        return ctypes.cdll.LoadLibrary(lib_name)
-
-    if current_platform is Platform.DEBIAN:
-        return ctypes.cdll.LoadLibrary("libuiobgige.so")
-        
+    library_name = {Platform.DEBIAN: "bindy.so",
+                     Platform.WIN32: "bindy.dll",
+                     Platform.WIN64: "bindy.dll"}.get(current_platform, None)
+    if library_name:
+        lib_path = get_full_path(os.path.join(current_platform.name.lower(), library_name))
+        return ctypes.cdll.LoadLibrary(lib_path)
+    
     raise ValueError("Unknown platform")
 
 

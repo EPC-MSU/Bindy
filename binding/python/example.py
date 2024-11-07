@@ -1,7 +1,7 @@
 import argparse
 import sys
 import time
-from libbindy import Bindy, initialize_network, shutdown_network
+from bindy import Bindy, initialize_network, shutdown_network
 
 
 def print_main_info(bindy_obj: Bindy) -> None:

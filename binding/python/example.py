@@ -12,9 +12,10 @@ def print_main_info(bindy_obj: Bindy) -> None:
 
 def run_client(filename: str, address: str, message: str) -> None:
     bindy_obj = Bindy(filename, False, False)
-    bindy_obj.connect_client(address)
+    connection_id = bindy_obj.connect_client(address)
     print_main_info(bindy_obj)
-    time.sleep(3)
+    bindy_obj.send_message(connection_id, message)
+    time.sleep(1)
 
 
 def run_server(filename: str) -> None:

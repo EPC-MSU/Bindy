@@ -1,5 +1,5 @@
 import ctypes
-from typing import List
+from typing import List, Optional
 from .libbindy import library as lib
 
 
@@ -34,10 +34,11 @@ class Bindy:
         """
         :param server_address: the IPv4 address or hostname to connect to;
         :param adapter_address: the IPv4 address of network adapter to bind to.
+        :return: connection identifier.
         """
 
-        lib.bindy_connect_client(self._bindy, ctypes.c_char_p(server_address.encode("utf-8")),
-                                 ctypes.c_char_p(adapter_address.encode("utf-8")))
+        return lib.bindy_connect_client(self._bindy, ctypes.c_char_p(server_address.encode("utf-8")),
+                                        ctypes.c_char_p(adapter_address.encode("utf-8")))
 
     def connect_server(self) -> None:
         lib.bindy_connect_server(self._bindy)
@@ -87,6 +88,10 @@ class Bindy:
         return lib.bindy_is_server(self._bindy)
 
     def list_connections(self) -> List[int]:
+        """
+        :return: list of active connections.
+        """
+
         buffer = ctypes.POINTER(ctypes.c_uint32)()
         connections_number = lib.bindy_list_connections(self._bindy, ctypes.byref(buffer))
         return [buffer[i] for i in range(connections_number)]
@@ -101,10 +106,13 @@ class Bindy:
         real_length = lib.bindy_read_data(self._bindy, connection_id, buffer, buffer_size)
         print(real_length)
 
-    def send_data(self, connection_id: int, data: List[int]) -> None:
+    def send_message(self, connection_id: int, message: str) -> None:
         """
         :param connection_id: connection identifier.
-        :param data:
+        :param message:
         """
 
-        pass
+        print([ord(c) for c in message])
+        data = ctypes.cast([ord(c) for c in message], ctypes.POINTER(ctypes.c_uint8))
+        print(data, ctypes.sizeof(data))
+        lib.bindy_send_data(self._bindy, connection_id, data, len(message))

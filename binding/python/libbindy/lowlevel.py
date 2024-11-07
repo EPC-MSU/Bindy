@@ -7,6 +7,10 @@ from typing import Optional
 
 
 class Platform(Enum):
+    """
+    Enumeration of supported platforms.
+    """
+
     DEBIAN = auto()
     WIN32 = auto()
     WIN64 = auto()
@@ -53,6 +57,10 @@ def open_library() -> ctypes.CDLL:
 
 
 def specify_argument_types(lib: ctypes.CDLL) -> None:
+    """
+    :param lib: library for which you need to set the types of arguments and return values ​​of functions.
+    """
+
     lib.bindy_connect_client.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
     lib.bindy_connect_client.restype = ctypes.c_uint32
 

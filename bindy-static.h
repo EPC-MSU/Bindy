@@ -178,7 +178,7 @@ public:
     conn_id_t connect(std::string addr, std::string adapter_addr = "");
 
     /*!
-    * Disconnects the channel identified by connection uid.
+    * Disconnects the channel identified by connection identifier.
     * Call to this function does not affect other connections to the same host.
     * @param[in] conn_id Connection identifier.
     */
@@ -233,7 +233,7 @@ public:
     int get_data_size(conn_id_t);
 
     /*!
-    * Returns the IP address of the peer of connection identified by "conn_id".
+    * Returns the IP address of the peer of connection identified by connection identifier.
     * @param[in] conn_id Connection identifier.
     * \return Structure which contains peer address.
     */
@@ -345,7 +345,7 @@ extern "C"
     * @param[in] bindy_ptr Pointer to Bindy node.
     * @param[in] address The IPv4 address or hostname to connect to.
     * @param[in] adapter_address The IPv4 address of network adapter to bind to.
-    * \return The handle to the created connection.Equals "conn_id_invalid" in case connection could not be established.
+    * \return The handle to the created connection. Equals "conn_id_invalid" in case connection could not be established.
     */
     BINDY_EXPORT conn_id_t bindy_connect_client(Bindy *bindy_ptr, const char *address, const char *adapter_address = "") {
         std::string addr(address);
@@ -389,7 +389,7 @@ extern "C"
     }
 
     /*!
-    * Disconnects the channel identified by connection uid. Call to this function does not affect other connections to the same host.
+    * Disconnects the channel identified by connection identifier. Call to this function does not affect other connections to the same host.
     * @param[in] bindy_ptr Pointer to Bindy node.
     * @param[in] conn_id Connection identifier.
     */
@@ -429,7 +429,7 @@ extern "C"
     }
 
     /*!
-    * Returns the IP address of the peer of connection identified by "conn_id".
+    * Returns the IP address of the peer of connection identified by connection identifier.
     * @param[in] bindy_ptr Pointer to Bindy node.
     * @param[in] conn_id Connection identifier.
     * \return IP address of the peer.

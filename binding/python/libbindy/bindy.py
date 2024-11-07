@@ -12,6 +12,9 @@ def shutdown_network() -> None:
 
 
 class Bindy:
+    """
+    A class for creating server nodes and client nodes that can connect to each other.
+    """
 
     def __init__(self, filename: str, is_active_node: bool, is_buffered: bool) -> None:
         """
@@ -30,7 +33,7 @@ class Bindy:
     def __del__(self) -> None:
         lib.bindy_delete(self._bindy)
 
-    def connect_client(self, server_address: str, adapter_address: str = "") -> None:
+    def connect_client(self, server_address: str, adapter_address: str = "") -> int:
         """
         :param server_address: the IPv4 address or hostname to connect to;
         :param adapter_address: the IPv4 address of network adapter to bind to.
@@ -96,15 +99,23 @@ class Bindy:
         connections_number = lib.bindy_list_connections(self._bindy, ctypes.byref(buffer))
         return [buffer[i] for i in range(connections_number)]
 
-    def read_data(self, connection_id: int) -> None:
+    def read_message(self, connection_id: int) -> Optional[str]:
         """
-        :param connection_id: connection identifier.
+        :param connection_id: connection identifier from which data needs to be read.
+        :return: read message.
         """
 
         buffer_size = 1024
         buffer = (ctypes.c_uint8 * buffer_size)()
-        real_length = lib.bindy_read_data(self._bindy, connection_id, buffer, buffer_size)
-        print(real_length)
+        data = []
+        while True:
+            read_data_length = lib.bindy_read_data(self._bindy, connection_id, buffer, buffer_size)
+            if read_data_length == 0:
+                break
+        
+            data.extend([chr(buffer[i]) for i in range(read_data_length)])
+        
+        return None if not data else "".join(data)
 
     def send_message(self, connection_id: int, message: str) -> None:
         """

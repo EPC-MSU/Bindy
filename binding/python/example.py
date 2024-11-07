@@ -27,7 +27,10 @@ def run_server(filename: str) -> None:
 
     while True:
         for connection_id in bindy_obj.list_connections():
-            print("Connected client from ", bindy_obj.get_ip_address(connection_id))
+            message = bindy_obj.read_message(connection_id)
+            if message:
+                print(f"Client from {bindy_obj.get_ip_address(connection_id)} says: {message}")
+
         time.sleep(0.01)
 
 

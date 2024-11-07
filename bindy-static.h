@@ -1,12 +1,13 @@
 #ifndef	BINDY_STATIC_H
 #define BINDY_STATIC_H
 
-#include <memory>
-#include <vector>
-#include <list>
-#include <string>
-#include <iostream>
 #include <future>
+#include <iostream>
+#include <list>
+#include <memory>
+#include <string>
+#include <string.h>
+#include <vector>
 
 #if defined (WIN32) || defined(WIN64)
 #include <winsock2.h>
@@ -405,7 +406,7 @@ extern "C"
     BINDY_EXPORT char * bindy_get_adapter_address(Bindy *bindy_ptr) {
         std::string adapter_addr = bindy_ptr->adapter_addr();
         char *adapter_address = new char [adapter_addr.length() + 1];
-        std::strcpy(adapter_address, adapter_addr.c_str());
+        strcpy(adapter_address, adapter_addr.c_str());
         return adapter_address;
     }
 

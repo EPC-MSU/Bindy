@@ -46,7 +46,7 @@ def load_library() -> ctypes.CDLL:
     """
     
     current_platform = detect_platform()
-    library_name = {Platform.DEBIAN: "bindy.so",
+    library_name = {Platform.DEBIAN: "libbindy.so",
                      Platform.WIN32: "bindy.dll",
                      Platform.WIN64: "bindy.dll"}.get(current_platform, None)
     if library_name:

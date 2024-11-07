@@ -54,7 +54,9 @@ Building the library and example
 --------------------------------
 
 ```bash
-cmake .
+mkdir build
+cd build
+cmake ..
 make
 ```
 

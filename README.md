@@ -60,6 +60,22 @@ cmake ..
 make
 ```
 
+## Running example
+
+1. Copy the file **sample_keyfile.sqlite** to the folder in which the executable file **client-server** is located.
+
+2. Start the server from a terminal:
+
+   ```bash
+   ./client-server sample_keyfile.sqlite
+   ```
+
+3. Start the client from a terminal:
+
+   ```bash
+   ./client-server sample_keyfile.sqlite localhost HelloWorld
+   ```
+
 History
 -------
 

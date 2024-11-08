@@ -16,7 +16,6 @@ void handler_function(bindy::conn_id_t, std::vector<uint8_t> data) {
 
 void run_client(char *argv[]) {
     bindy::Bindy *bindy_ptr;
-
     try {
         bindy_ptr = bindy::bindy_create_new(argv[1], false, false);
     } catch (...) {
@@ -43,7 +42,6 @@ void run_client(char *argv[]) {
 
 void run_server(char *argv[]) {
     bindy::Bindy *bindy_ptr;
-
     try {
         bindy_ptr = bindy::bindy_create_new(argv[1], true, true);
     } catch (...) {
@@ -66,9 +64,9 @@ void run_server(char *argv[]) {
         uint8_t buffer[buffer_size + 1];
         for (int i = 0; i < connections_number; i++) {
             bindy::conn_id_t conn_id = connections[i];
-            int len = bindy::bindy_read_data(bindy_ptr, conn_id, buffer, buffer_size);
-            if (len > 0) {
-                buffer[len] = 0;
+            int read_data_size = bindy::bindy_read_data(bindy_ptr, conn_id, buffer, buffer_size);
+            if (read_data_size > 0) {
+                buffer[read_data_size] = 0;
                 std::cout << "Client from host " << bindy::bindy_get_ip_address(bindy_ptr, conn_id) << " says: " << (const char *)buffer << std::endl;
                 std::cout.flush();
             }

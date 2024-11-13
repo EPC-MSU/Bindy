@@ -76,6 +76,10 @@ make
    ./client-server sample_keyfile.sqlite localhost HelloWorld
    ```
 
+## Python binding
+
+[See directory.](./binding/python)
+
 History
 -------
 

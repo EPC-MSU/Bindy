@@ -74,17 +74,17 @@ class User:
 
     def convert_key_to_bytes(self) -> bytes:
         """
-        :return:
+        :return: key as bytes.
         """
 
         return b"".join(number.to_bytes(1, "big") for number in self._key)
 
-    def convert_uuid_to_str(self) -> str:
+    def convert_uuid_to_bytes(self) -> bytes:
         """
-        :return: UUID as string.
+        :return: UUID as bytes.
         """
 
-        return "".join(chr(number) for number in self._uuid)
+        return b"".join(number.to_bytes(1, "big") for number in self._uuid)
 
     @staticmethod
     def get_key_from_bin_data(data: bytes) -> List[int]:
@@ -164,7 +164,7 @@ def save_users_to_database(filename: str, users: List[User]) -> None:
     for user in users:
         print(user)
         cursor.execute("INSERT INTO Users (uuid, name, role, key) VALUES (?, ?, ?, ?)",
-                       (user.convert_uuid_to_str(), user.name, user.role, user.convert_key_to_bytes()))
+                       (user.convert_uuid_to_bytes(), user.name, user.role, user.convert_key_to_bytes()))
     connection.commit()
 
     connection.close()

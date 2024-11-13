@@ -9,11 +9,11 @@ class User:
 
     AES_KEY_LENGTH: int = 16
     AUTH_DATA_LENGTH: int = 32
-    
+
     def __init__(self, uuid: List[int], name: str, role: int, key: List[int]) -> None:
         """
         :param uuid: unique identifier;
-        :param name: user name;
+        :param name: username;
         :param role: user role;
         :param key: unique key.
         """
@@ -22,7 +22,7 @@ class User:
         self._name: str = name
         self._role: int = role
         self._uuid: List[int] = uuid
-    
+
     def __str__(self) -> str:
         """
         :return: text representation.
@@ -41,11 +41,11 @@ class User:
     @property
     def name(self) -> str:
         """
-        :return: user name.
+        :return: username.
         """
 
         return self._name
-    
+
     @property
     def role(self) -> int:
         """
@@ -67,9 +67,13 @@ class User:
         user_name = User.get_user_name_from_bin_data(user_data)
         key = User.get_key_from_bin_data(user_data)
         return User(uuid, user_name, user_role, key)
-    
+
     @classmethod
     def size(cls) -> int:
+        """
+        :return: size of binary data allocated for the user in a binary file of the old format.
+        """
+
         return cls.AES_KEY_LENGTH + cls.AUTH_DATA_LENGTH
 
     def convert_key_to_bytes(self) -> bytes:
@@ -99,7 +103,7 @@ class User:
     def get_user_name_from_bin_data(data: bytes) -> str:
         """
         :param data: bytes from which to extract user data.
-        :return: user name.
+        :return: username.
         """
 
         user_data = data[:User.size()]
@@ -119,10 +123,16 @@ class User:
 def create_table(connection) -> None:
     cursor = connection.cursor()
     try:
-        cursor.execute("CREATE TABLE Users (uuid TEXT UNIQUE NOT NULL PRIMARY KEY, name TEXT NOT NULL, role INTEGER NOT NULL, key BLOB (16) NOT NULL UNIQUE);")
-        cursor.execute("CREATE TRIGGER SingleMasterInsert BEFORE INSERT ON Users FOR EACH ROW WHEN NEW.role = 1 BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;")
-        cursor.execute("CREATE TRIGGER SingleMasterUpdate BEFORE UPDATE OF role ON Users FOR EACH ROW WHEN NEW.role = 1  BEGIN SELECT RAISE (ABORT, 'master already exists') WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;")
+        cursor.execute("CREATE TABLE Users (uuid TEXT UNIQUE NOT NULL PRIMARY KEY, name TEXT NOT NULL, "
+                       "role INTEGER NOT NULL, key BLOB (16) NOT NULL UNIQUE);")
+        cursor.execute("CREATE TRIGGER SingleMasterInsert BEFORE INSERT ON Users FOR EACH ROW WHEN NEW.role = 1 "
+                       "BEGIN SELECT RAISE (ABORT, 'master already exists') "
+                       "WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;")
+        cursor.execute("CREATE TRIGGER SingleMasterUpdate BEFORE UPDATE OF role ON Users FOR EACH ROW WHEN NEW.role = 1"
+                       " BEGIN SELECT RAISE (ABORT, 'master already exists') "
+                       "WHERE EXISTS(SELECT 1 FROM Users WHERE role = 1); END;")
         connection.commit()
+        print("'Users' table has been created in the database")
     except Exception:
         print("'Users' table has already been created in the database")
 
@@ -142,11 +152,13 @@ def read_users_from_bin_file(filename: str) -> List[User]:
         data = file.read()
 
     users = []
+    print(f"Users read from file '{filename}':")
     while data:
         user_role = 1 if not len(users) else 2
         user = User.create_user_from_data(data, user_role)
         users.append(user)
         data = data[User.size():]
+        print(user)
 
     return users
 
@@ -162,10 +174,10 @@ def save_users_to_database(filename: str, users: List[User]) -> None:
 
     cursor = connection.cursor()
     for user in users:
-        print(user)
         cursor.execute("INSERT INTO Users (uuid, name, role, key) VALUES (?, ?, ?, ?)",
                        (user.convert_uuid_to_bytes(), user.name, user.role, user.convert_key_to_bytes()))
     connection.commit()
+    print(f"Users are written to file '{filename}'")
 
     connection.close()
 

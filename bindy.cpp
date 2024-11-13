@@ -1331,9 +1331,7 @@ void init_db(sqlite3 *db, const user_vector_t &users=user_vector_t()) {
 	DEBUG("Database initialized)");
 }
 
-Bindy::Bindy(std::string filename, bool is_server, bool is_buffered)
-	:
-	port_(49150), is_server_(is_server), is_buffered_(is_buffered){
+Bindy::Bindy(std::string filename, bool is_server, bool is_buffered, int port) : port_(port), is_server_(is_server), is_buffered_(is_buffered) {
 	try {
         padapter_addr_ = new std::string("");
 		std::random_device rd; // may throw if random device is not available

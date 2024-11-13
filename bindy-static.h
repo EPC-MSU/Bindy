@@ -115,8 +115,9 @@ public:
     * @param[in] is_buffered The boolean value which indicates whether this class uses internal buffering.
     * If this parameter is true, then incoming data is stored in the buffer and may be retrieved using read() method.
     * If this parameter is false, then incoming data immediately triggers callback function if the callback is set.
+    * @param[in] port The port number which will be used by Bindy to listen for connections.
     */
-    Bindy(std::string filename, bool is_active_node, bool is_buffered);
+    Bindy(std::string filename, bool is_active_node, bool is_buffered, int port = 49150);
 
     /*!
     * Class destructor.
@@ -220,11 +221,11 @@ public:
     * Tries to read "size" bytes from buffer into "p"; returns amount of bytes read and removed from buffer.
     * Used only with buffered mode.
     * @param[in] conn_id Connection identifier.
-    * @param[out] p Pointer to the read buffer. Should be able to hold at least "size" bytes.
+    * @param[out] buffer Pointer to the read buffer. Should be able to hold at least "size" bytes.
     * @param[in] size Amount of bytes requested.
     * \return Amount of bytes read.
     */
-    int read(conn_id_t conn_id, uint8_t *p, int size);
+    int read(conn_id_t conn_id, uint8_t *buffer, int size);
 
     /*!
     * Returns amount of data in the buffer of connection identified by "conn_id". Used only with buffered mode.
@@ -258,11 +259,12 @@ public:
 
 private:
     friend class Connection;
-    BindyState* bindy_state_;
+    BindyState *bindy_state_;
     const int port_;
     const bool is_server_;
     const bool is_buffered_;
-    std::string * padapter_addr_;
+    std::string *padapter_addr_;
+
     /*!
     * Main thread of the Bindy class. Listens on an opened socket, accepts connections and spawns socket threads.
     */
@@ -273,53 +275,53 @@ private:
     Bindy& operator=(const Bindy&) = delete;
 
     /*!
-    *	Sets name of this node.
-    *	@param[in] nodename Node name string.
+    * Sets name of this node.
+    * @param[in] nodename Node name string.
     */
     void set_nodename(std::string nodename);
 
     /*!
-    *	Outputs name of this node.
-    *	\return Node name string.
+    * Outputs name of this node.
+    * \return Node name string.
     */
     std::string get_nodename(void);
 
     /*!
-    *	Outputs username of the root user.
-    *	\return name description
+    * Outputs username of the root user.
+    * \return name description
     */
     user_t get_master();
 
     /*!
-    *	Finds key by user name.
-    *	@param[in] Username.
-    *	\return  Returns valid key for this uid.
+    * Finds key by user name.
+    * @param[in] Username.
+    * \return Returns valid key for this uid.
     */
     aes_key_t key_by_uid(const user_id_t& uid);
 
     /*!
-    *	Internal method for sending data.
-    *	@param[in] conn_id Connection identifier.
-    *	@param[in] data The data to send.
+    * Internal method for sending data.
+    * @param[in] conn_id Connection identifier.
+    * @param[in] data The data to send.
     */
     void callback_data(conn_id_t conn_id, std::vector<uint8_t> data);
 
     /*!
-    *	Internal disconnect method.
-    *	@param[in] conn_id Connection identifier.
+    * Internal disconnect method.
+    * @param[in] conn_id Connection identifier.
     */
     void callback_disc(conn_id_t conn_id);
 
     /*!
-    *	Internal method which adds connection to the connection table of the class.
-    *	@param[in] conn_id Connection identifier.
-    *	@param[in] Connection Pointer to the connection class, associated with this connection.
+    * Internal method which adds connection to the connection table of the class.
+    * @param[in] conn_id Connection identifier.
+    * @param[in] Connection Pointer to the connection class, associated with this connection.
     */
     void add_connection(conn_id_t conn_id, SuperConnection * conn);
 
     /*!
-    *	Internal method which deletes the connection from the connection table by its identifier.
-    *	@param[in] conn_id Connection identifier.
+    * Internal method which deletes the connection from the connection table by its identifier.
+    * @param[in] conn_id Connection identifier.
     */
     void delete_connection(conn_id_t conn_id);
 };

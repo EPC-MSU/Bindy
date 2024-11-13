@@ -62,7 +62,7 @@ void run_server(char *argv[]) {
 
         const int buffer_size = 1024;
         uint8_t buffer[buffer_size + 1];
-        for (int i = 0; i < connections_number; i++) {
+        for (size_t i = 0; i < connections_number; i++) {
             bindy::conn_id_t conn_id = connections[i];
             int read_data_size = bindy::bindy_read_data(bindy_ptr, conn_id, buffer, buffer_size);
             if (read_data_size > 0) {

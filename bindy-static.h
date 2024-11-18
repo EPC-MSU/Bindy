@@ -39,8 +39,8 @@
 #endif
 
 
-namespace bindy
-{
+namespace bindy {
+
 // bindy version
 typedef struct semver_t {
     unsigned int major;
@@ -59,7 +59,9 @@ struct user_id_t {
     uint8_t bytes[AUTH_DATA_LENGTH];
 //	bool operator ==(const user_id_t& other) const;
 };
+
 typedef uint8_t role_id_t;
+
 typedef struct {
     uint8_t bytes[AES_KEY_LENGTH];
 } aes_key_t;
@@ -71,7 +73,7 @@ struct user_t {
     role_id_t role;
 };
 
-enum class link_pkt : uint8_t{
+enum class link_pkt : uint8_t {
     PacketData = 0,
     PacketInitRequest = 1,
     PacketInitReply = 2,
@@ -125,10 +127,9 @@ public:
     */
     ~Bindy();
 
-    user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role);
-    user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid);
     user_id_t add_user_local(const std::string &username, const aes_key_t &key);
-    void del_user_local(const user_id_t &uuid);
+    user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role = 2);
+    void delete_user_local(const user_id_t &uuid);
     void change_key_local(const user_id_t &uuid, const aes_key_t &key);
     user_vector_t list_users_local();
     user_vector_t list_users_local(std::function<bool(user_t&)>);
@@ -136,7 +137,7 @@ public:
 
 
     std::future<user_id_t> add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
-    std::future<void> del_user_remote(const conn_id_t conn_id, const user_id_t &uuid);
+    std::future<void> delete_user_remote(const conn_id_t conn_id, const user_id_t &uuid);
     std::future<void> change_key_remote(const conn_id_t conn_id, const user_id_t &uuid, const aes_key_t &key);
     std::future<user_vector_t> list_users_remote(const conn_id_t conn_id);
     std::future<void> set_master_remote(const conn_id_t conn_id, const user_id_t &uuid);
@@ -260,7 +261,7 @@ public:
 private:
     friend class Connection;
     BindyState *bindy_state_;
-    const int port_;
+    int port_;
     const bool is_server_;
     const bool is_buffered_;
     std::string *padapter_addr_;
@@ -373,11 +374,12 @@ extern "C"
     * @param[in] is_buffered The boolean value which indicates, whether created Bindy node uses internal buffering.
     * If this parameter is true, then incoming data is stored in the buffer and may be retrieved using bindy_read() function.
     * If this parameter is false, then incoming data immediately triggers callback function if the callback is set.
+    * @param[in] port The port number which will be used by Bindy to listen for connections.
     * \return Pointer to new Bindy node.
     */
-    BINDY_EXPORT Bindy * bindy_create_new(const char *filename, bool is_active_node, bool is_buffered) {
+    BINDY_EXPORT Bindy * bindy_create_new(const char *filename, bool is_active_node, bool is_buffered, int port = 49150) {
         std::string filename_str(filename);
-        return new Bindy(filename_str, is_active_node, is_buffered);
+        return new Bindy(filename_str, is_active_node, is_buffered, port);
     }
 
     /*!

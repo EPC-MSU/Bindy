@@ -43,7 +43,7 @@ void run_client(char *argv[]) {
 void run_server(char *argv[]) {
     bindy::Bindy *bindy_ptr;
     try {
-        bindy_ptr = bindy::bindy_create_new(argv[1], true, true);
+        bindy_ptr = bindy::bindy_create_new(argv[1], true, true, 49151);
     } catch (...) {
         fail("Error initializing bindy. Please check if configuration file exists.");
     }

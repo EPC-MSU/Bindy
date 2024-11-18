@@ -50,6 +50,7 @@ CHECK_SYMBOL_EXISTS(TCP_KEEPCNT netinet/tcp.h HAVE_TCP_KEEPCNT)
 SET(SOURCES
         bindy.cpp
         tinythread.cpp
+        utils.cpp
         vendor/sole/sole.cpp
     )
 

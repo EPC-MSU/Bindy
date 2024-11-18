@@ -41,6 +41,9 @@
 
 namespace bindy {
 
+#define DEFAULT_PORT 49150
+#define DEFAULT_ROLE 2
+
 // bindy version
 typedef struct semver_t {
     unsigned int major;
@@ -119,7 +122,7 @@ public:
     * If this parameter is false, then incoming data immediately triggers callback function if the callback is set.
     * @param[in] port The port number which will be used by Bindy to listen for connections.
     */
-    Bindy(std::string filename, bool is_active_node, bool is_buffered, int port = 49150);
+    Bindy(std::string filename, bool is_active_node, bool is_buffered, int port = DEFAULT_PORT);
 
     /*!
     * Class destructor.
@@ -128,13 +131,12 @@ public:
     ~Bindy();
 
     user_id_t add_user_local(const std::string &username, const aes_key_t &key);
-    user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role = 2);
+    user_id_t add_user_local(const std::string &username, const aes_key_t &key, const user_id_t &uid, const role_id_t &role = DEFAULT_ROLE);
     void delete_user_local(const user_id_t &uuid);
     void change_key_local(const user_id_t &uuid, const aes_key_t &key);
     user_vector_t list_users_local();
     user_vector_t list_users_local(std::function<bool(user_t&)>);
     void set_master_local(const user_id_t &uuid);
-
 
     std::future<user_id_t> add_user_remote(const conn_id_t conn_id, const std::string &username, const aes_key_t &key);
     std::future<void> delete_user_remote(const conn_id_t conn_id, const user_id_t &uuid);
@@ -318,7 +320,7 @@ private:
     * @param[in] conn_id Connection identifier.
     * @param[in] Connection Pointer to the connection class, associated with this connection.
     */
-    void add_connection(conn_id_t conn_id, SuperConnection * conn);
+    void add_connection(conn_id_t conn_id, SuperConnection *conn);
 
     /*!
     * Internal method which deletes the connection from the connection table by its identifier.
@@ -377,7 +379,7 @@ extern "C"
     * @param[in] port The port number which will be used by Bindy to listen for connections.
     * \return Pointer to new Bindy node.
     */
-    BINDY_EXPORT Bindy * bindy_create_new(const char *filename, bool is_active_node, bool is_buffered, int port = 49150) {
+    BINDY_EXPORT Bindy * bindy_create_new(const char *filename, bool is_active_node, bool is_buffered, int port = DEFAULT_PORT) {
         std::string filename_str(filename);
         return new Bindy(filename_str, is_active_node, is_buffered, port);
     }

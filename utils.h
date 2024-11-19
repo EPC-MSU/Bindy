@@ -22,7 +22,7 @@ void parse_host_and_port(std::string *address, std::string *host, int *port);
  * @param[in] colon_position The position of the colon in the address from the end.
  * \return Found port value.
  */
-int parse_port(std::string* address, int colon_position);
+int parse_port(std::string* address, size_t colon_position);
 
 }
 

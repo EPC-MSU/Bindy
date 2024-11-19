@@ -19,7 +19,7 @@ void parse_host_and_port(std::string *address, std::string *host, int *port) {
 }
 
 
-int parse_port(std::string* address, int colon_position) {
+int parse_port(std::string* address, size_t colon_position) {
     size_t port_string_size = address->size() - colon_position - 1;
     std::string port_string = address->substr(colon_position + 1, port_string_size);
     size_t pos;

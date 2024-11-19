@@ -76,7 +76,7 @@ def specify_argument_types(lib: ctypes.CDLL) -> None:
 
     lib.bindy_connect_server.argtypes = [ctypes.c_void_p]
 
-    lib.bindy_create_new.argtypes = [ctypes.c_char_p, ctypes.c_bool, ctypes.c_bool]
+    lib.bindy_create_new.argtypes = [ctypes.c_char_p, ctypes.c_bool, ctypes.c_bool, ctypes.c_int]
     lib.bindy_create_new.restype = ctypes.c_void_p
 
     lib.bindy_delete.argtypes = [ctypes.c_void_p]

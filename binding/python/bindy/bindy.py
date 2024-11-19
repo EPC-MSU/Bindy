@@ -16,7 +16,9 @@ class Bindy:
     A class for creating server nodes and client nodes that can connect to each other.
     """
 
-    def __init__(self, filename: str, is_active_node: bool, is_buffered: bool) -> None:
+    DEFAULT_PORT: int = 49150
+
+    def __init__(self, filename: str, is_active_node: bool, is_buffered: bool, port: int = DEFAULT_PORT) -> None:
         """
         :param filename: the full name of the file containing a list of usernames and keys;
         :param is_active_node: the boolean value which indicates, whether created Bindy node is the active node.
@@ -25,10 +27,11 @@ class Bindy:
         connect_client() method is called;
         :param is_buffered: the boolean value which indicates, whether created Bindy node uses internal buffering.
         If this parameter is True, then incoming data is stored in the buffer and may be retrieved using read() method.
-        If this parameter is False, then incoming data immediately triggers callback function if the callback is set.
+        If this parameter is False, then incoming data immediately triggers callback function if the callback is set;
+        :param port: the port number which will be used by Bindy to listen for connections.
         """
 
-        self._bindy = lib.bindy_create_new(ctypes.c_char_p(filename.encode("utf-8")), is_active_node, is_buffered)
+        self._bindy = lib.bindy_create_new(ctypes.c_char_p(filename.encode("utf-8")), is_active_node, is_buffered, port)
 
     def __del__(self) -> None:
         lib.bindy_delete(self._bindy)

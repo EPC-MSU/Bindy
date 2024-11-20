@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 
 setup(name="bindy",
-      version="2.0.1",
+      version="2.0.2",
       description="A lightweight cross-platform framework for cloud service",
       url="https://github.com/EPC-MSU/Bindy",
       author="EPC MSU",

@@ -1,30 +1,30 @@
 # bindy
 
-Python binding для библиотеки **Bindy**.
+Python binding for the **Bindy** library.
 
-Репозиторий: https://github.com/EPC-MSU/Bindy
+Repository: https://github.com/EPC-MSU/Bindy
 
-## Установка
+## Installation
 
-Для установки выполните команду:
+To install, run the command:
 
 ```bash
 python -m pip install bindy
 ```
 
-## Запуск примера
+## Running the example
 
-1. Скопируйте из корня репозитория файл **sample_keyfile.sqlite** и положите в Вашу рабочую папку.
+1. Copy the file **sample_keyfile.sqlite** from the root of the repository and put it in your working folder.
 
-2. Скопируйте из репозитория файл **binding/python/example.py** и положите в Вашу рабочую папку.
+2. Copy the file **binding/python/example.py** from the repository and put it in your working folder.
 
-3. Запустите сервер:
+3. Start the server:
 
    ```bash
    python example.py sample_keyfile.sqlite
    ```
 
-4. Запустите клиента:
+4. Start the client:
 
    ```bash
    python example.py sample_keyfile.sqlite localhost HelloWorld

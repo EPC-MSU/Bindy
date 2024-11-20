@@ -120,6 +120,15 @@ class Bindy:
 
         return None if not data else "".join(data)
 
+    def send_bytes(self, connection_id: int, raw_data: bytes) -> None:
+        """
+        :param connection_id: connection identifier to send bytes to;
+        :param data: bytes to send.
+        """
+
+        data = (ctypes.c_uint8 * len(raw_data))(*raw_data)
+        lib.bindy_send_data(self._bindy, connection_id, data, len(message))
+
     def send_message(self, connection_id: int, message: str) -> None:
         """
         :param connection_id: connection identifier to send message to;

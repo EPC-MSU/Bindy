@@ -4,7 +4,7 @@ Python binding для библиотеки **Bindy**.
 
 ## Сборка wheel
 
-1. Укажите корректную версию **bindy** в поле **version** в файле **setup.py**.
+1. Укажите корректную версию **bindy** в поле **version** в файлах **setup.py** и **pyproject.toml**.
 
 2. Соберите библиотеки **Bindy** для debian, win32, win64.
 

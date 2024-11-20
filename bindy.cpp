@@ -1785,7 +1785,7 @@ conn_id_t Bindy::connect(std::string address, std::string adapter_address) {
     std::string host;
 	int port;
 	parse_host_and_port(&address, &host, &port);
-	std::cout << "Parsed host and port: host = " << host << " port = " << port << "\n";
+	DEBUG("Parsed host and port: host = " << host << " port = " << port);
     if (port != -1) {
         port_ = port;
     }

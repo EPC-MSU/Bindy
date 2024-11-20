@@ -1,9 +1,6 @@
 cd ..
 setlocal enableextensions
 
-if defined TWINE_USERNAME (echo found username) else (exit)
-if defined TWINE_PASSWORD (echo found password) else (exit)
-
 if exist build-venv rd /s/q build-venv
 if exist dist rd /s/q dist
 if exist src rd /s/q src

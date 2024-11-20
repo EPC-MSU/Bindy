@@ -4,3 +4,8 @@ __pycache__/
 build/
 build-venv/
 dist/
+binding/python/LICENSE
+binding/python/sample_keyfile.sqlite
+binding/python/src/
+keyfile.bin
+keyfile.sqlite

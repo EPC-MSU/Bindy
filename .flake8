@@ -10,13 +10,13 @@ max-line-length = 120
 # -----------------------------
 # Add comments for all ignored files and folders to justify the common standard violation
 exclude = 
-          # Git internal folder`
+          # Git internal folder
           .git,
           # Python temporary files
           __pycache__,
           # External dependencies
           venv,
-          # Vendor repos
+          # Vendor repos, third-party code is not checked
           vendor
 
 # Violations ignore list
